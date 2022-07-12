@@ -54,11 +54,10 @@ def list_consumer_groups():
     """Return the id of all active consumer groups"""
     group_meta = admin.list_groups(timeout=10) # List all active consumer groups
     return [d.id for d in group_meta]
-    # print(f'- id={data.id} broker={data.broker} state={data.state} members={data.members}')
 
 
 def topics_details():
-    """Retreive topics details (paritions, etc.)"""
+    """Retreive topics details (paritions, offsets, etc.)"""
 
     topics_details = {}
     cluster_meta = admin.list_topics(timeout=5) # Get info for this topic
@@ -78,6 +77,7 @@ def topics_details():
 
 
 def consumer_group_details():
+    """Retreive consumer details"""
 
     # consumer_goups = list_consumer_groups()
     topics = topics_details()
