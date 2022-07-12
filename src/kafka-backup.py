@@ -6,6 +6,7 @@ from time import sleep
 
 from dataclasses import dataclass
 
+
 @dataclass
 class PartitionDetails:
     id: int
@@ -15,8 +16,20 @@ class PartitionDetails:
 @dataclass
 class TopicDetails:
     name: str
-    paritions: List[PartitionDetails]
+    partitions: List[PartitionDetails]
 
+@dataclass
+class ConsumerOffset:
+    topic: str
+    partition: int
+    committedOffset: int
+
+@dataclass
+class ConsumerDetails:
+    group_id: str
+    offsets: List # [topic][partition]
+
+TOPIC_NAME = 'test-topic-2'
 
 BOOTSTRAP_SERVERS = 'localhost:29092'
 CLIENT_ID = 'kafka-backup.py'
@@ -29,7 +42,7 @@ producer = Producer({
 consumer = Consumer({
     'group.id': 'kafka-backup',
     'bootstrap.servers': BOOTSTRAP_SERVERS,
-    # 'auto.offset.reset': 'smallest'
+    'auto.offset.reset': 'smallest'
 })
 
 admin = AdminClient({
@@ -47,7 +60,7 @@ def list_consumer_groups():
 def topics_details():
     """Retreive topics details (paritions, etc.)"""
 
-    topics_details = []
+    topics_details = {}
     cluster_meta = admin.list_topics(timeout=5) # Get info for this topic
     for t in cluster_meta.topics.values():
         if t.topic == "__consumer_offsets":
@@ -55,32 +68,40 @@ def topics_details():
 
         partitions = []
         for id in t.partitions:
-            # print(p.id, p.leader)
             wm = consumer.get_watermark_offsets(TopicPartition(t.topic, id))
             # print(f'{id} : {wm}')
             partitions.append(PartitionDetails(id, wm[0], wm[1]))
         
-        topics_details.append(TopicDetails(t.topic, partitions))
+        topics_details[t.topic] = TopicDetails(t.topic, partitions)
 
-    print(topics_details)
+    return topics_details
 
 
 def consumer_group_details():
 
-    consumer_goups = list_consumer_groups()
+    # consumer_goups = list_consumer_groups()
+    topics = topics_details()
 
-    print('Consumer group details:')
+    details = {}
     for id in ['kafka-backup']: # Consumer group IDs
         c = Consumer({
             'group.id': id,
             'bootstrap.servers': BOOTSTRAP_SERVERS,
         })
-        p = c.committed([TopicPartition('test-topic', 0)])
-        # print('Comitted:', [f'topic={p.topic} offset={offsetToStr(p.offset)} partition={p.partition}' for p in partitions])
+
+        # For each topic, get the committed offset
+        for tn in topics.values():
+            partition_offsets = c.committed([TopicPartition(tn.name, x.id) for x in tn.partitions])
+        
+        details[id] = ConsumerDetails(id, [ConsumerOffset(tn.name, p.partition, p.offset) for p in partition_offsets])
+
+    return details
+
 
 def produceMessages(count = 100):
+    print(f'Producing {count} messages in {TOPIC_NAME}')
     for i in range(0, count):
-        producer.produce('test-topic', key=f'key{i}', value=f'value{i}')
+        producer.produce(TOPIC_NAME, key=f'key{i}', value=f'value{i}')
     producer.flush()
 
 def offsetToStr(offset):
@@ -97,46 +118,62 @@ def offsetToStr(offset):
     else:
         return 'unknown'
 
-def consumeMessages(count = 5):
+def consumeOffsetTopic(count = 5):
+    c = Consumer({
+        'group.id': 'kafka-backup',
+        'bootstrap.servers': BOOTSTRAP_SERVERS,
+        'auto.offset.reset': 'smallest'
+    })
 
-    def print_assignment(consumer, partitions):
-        print('Assignment:', [f'topic={p.topic} offset={offsetToStr(p.offset)} partition={p.partition}' for p in partitions])
-        partitions = consumer.committed([TopicPartition('test-topic', 0)])
-        print('Comitted:', [f'topic={p.topic} offset={offsetToStr(p.offset)} partition={p.partition}' for p in partitions])
-        
-    consumer.subscribe(['test-topic'], on_assign=print_assignment)
+    c.subscribe(['__consumer_offsets'])
 
+    # c.seek(TopicPartition('__consumer_offsets')
     for i in range(0, count):
-        msg = consumer.poll(30.0)
+        msg = c.poll(10)
 
         if msg is None:
             print(f'{i} >> Consumer: Timeout polling for message')
         elif msg.error():
             print(f'Error reading message')
         else:
-            print(f'{i} >> offset={msg.offset()} length={len(msg)} partition={msg.partition()} ts={msg.timestamp()[1]} value={msg.value()}')
+            print(f'{i} ({msg.partition()}:{msg.offset()}) >> ts={msg.timestamp()[1]} key={msg.key()} value={msg.value()[0:50]}')
 
-    
+    c.close()
 
-def printInfo():
-    # meta = consumer.consumer_group_metadata()
-    # print(meta)
 
-    md = admin.list_topics(timeout=10)
+def consumeMessages(count = 100):
 
-    print(f'{len(md.topics)} topics:')
-    for t in iter(md.topics.values()):
-        info = consumer.get_watermark_offsets(TopicPartition(t.topic, 0))
-        print(f'- {t} watermark={info}')
+    def print_assignment(consumer, partitions):
+        print('Assignment:', [f'topic={p.topic} offset={offsetToStr(p.offset)} partition={p.partition}' for p in partitions])
+        partitions = consumer.committed([TopicPartition(TOPIC_NAME, 0)])
+        print('Comitted:', [f'topic={p.topic} offset={offsetToStr(p.offset)} partition={p.partition}' for p in partitions])
+        
+    consumer.subscribe([TOPIC_NAME], on_assign=print_assignment)
+
+    for i in range(0, count):
+        msg = consumer.poll(10.0)
+
+        if msg is None:
+            print(f'{i} >> Consumer: Timeout polling for message')
+        elif msg.error():
+            print(f'Error reading message')
+        else:
+            print(f'{i} ({msg.partition()}:{msg.offset()}) >> offset={msg.offset()} length={len(msg)} partition={msg.partition()} ts={msg.timestamp()[1]} value={msg.value()}')
+
+    consumer.commit()
 
 
 if __name__ == "__main__":
     
     # consumeMessages()
+    # consumeOffsetTopic()
     # produceMessages(123)
     # printInfo()
-    topics_details()
+    topics = topics_details()
+    consumers = consumer_group_details()
 
+    print(topics)
+    print(consumers)
 
     print('Closing consumer')
     consumer.close()
