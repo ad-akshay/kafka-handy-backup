@@ -4,6 +4,7 @@ Interface to the storage system
 
 from struct import *
 import cbor2
+from Encoder import Encoder
 from FileStream import FileStream
 
 class Storage:
@@ -12,6 +13,8 @@ class Storage:
 
     def __init__(self, base_path):
         self.base_path = base_path
+
+        self.encoder = Encoder('cbor')
 
     def backup_message(self, msg):
         """Back up the given message to the proper stream (based on its topic and partition)"""
@@ -25,17 +28,12 @@ class Storage:
 
         stream = self.streams[stream_id]
         
-        # Create an object with all the message details we need to save
-        obj_msg = {
-            'value': msg.value(),
-            'offset': msg.offset(),
-            'key': msg.key(),
-            'timestamp': msg.timestamp()[1],
-            'headers': msg.headers()
-        }
-
         # Encode the message
-        encoded_msg = cbor2.dumps(obj_msg)
+        encoded_msg = self.encoder.encode_message(msg)
+
+        # if encoded_msg is None:
+        #     print('ERROR encoding message')
+        #     return
 
         # Write the encoded message to the stream : | size (uint32) | encoded_msg ([size] bytes) |
         print(f'Writing message {msg.offset()} to {stream_id}')
