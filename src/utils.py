@@ -16,7 +16,6 @@ def offsetToStr(offset):
     else:
         return 'unknown'
 
-
 @dataclass
 class PartitionDetails:
     id: int

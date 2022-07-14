@@ -1,30 +1,28 @@
 #! ../venv/Scripts/python
 import argparse, re, signal, threading, time
+import os
 from confluent_kafka import Producer, Consumer, TopicPartition
 from confluent_kafka.admin import AdminClient
 from TopicBackupConsumer import TopicBackupConsumer
-from utils import ConsumerDetails, ConsumerOffset, PartitionDetails, TopicDetails
+from utils import Configuration, ConsumerDetails, ConsumerOffset, PartitionDetails, TopicDetails
 
-BOOTSTRAP_SERVERS = 'localhost:29092'
-
-consumer = Consumer({
-    'group.id': 'kafka-backup',
-    'bootstrap.servers': BOOTSTRAP_SERVERS,
-    'auto.offset.reset': 'smallest'
-})
-
-admin = AdminClient({
-    'bootstrap.servers': BOOTSTRAP_SERVERS,
-})
 
 def list_consumer_groups():
     """Return the id of all active consumer groups"""
+    admin = AdminClient({'bootstrap.servers': BOOTSTRAP_SERVERS})
     group_meta = admin.list_groups(timeout=10) # List all active consumer groups
     return [d.id for d in group_meta]
 
 
 def list_topics():
     """Retreive topics details (paritions, offsets, etc.)"""
+    admin = AdminClient({'bootstrap.servers': BOOTSTRAP_SERVERS})
+    consumer = Consumer({
+        'group.id': 'kafka-backup',
+        'bootstrap.servers': BOOTSTRAP_SERVERS,
+        'auto.offset.reset': 'smallest'
+    })
+
     topics_details = {}
     cluster_meta = admin.list_topics(timeout=5) # Get info for this topic
     for t in cluster_meta.topics.values():
@@ -38,6 +36,8 @@ def list_topics():
             partitions.append(PartitionDetails(id, wm[0], wm[1]))
         
         topics_details[t.topic] = TopicDetails(t.topic, partitions)
+
+    consumer.close()
 
     return topics_details
 
@@ -58,6 +58,8 @@ def consumer_group_details():
         # For each topic, get the committed offset
         for tn in topics.values():
             partition_offsets = c.committed([TopicPartition(tn.name, x.id) for x in tn.partitions])
+
+        c.close()
         
         details[id] = ConsumerDetails(id, [ConsumerOffset(tn.name, p.partition, p.offset) for p in partition_offsets])
 
@@ -71,12 +73,12 @@ subparsers = parser.add_subparsers(dest='command')
 p1 = subparsers.add_parser('backup')
 p1.add_argument('--topic', '-t', dest='topics', action='append', help='Topics to backup')
 p1.add_argument('--topics-regex', type=str, help='Topics to backup')
-# p1.add_argument('--bootstrap-servers', type=str, required=True)
+p1.add_argument('--bootstrap-servers', type=str)
 
 p2 = subparsers.add_parser('list-topics')
+p2.add_argument('--bootstrap-servers', type=str)
 
 args = parser.parse_args()
-
 
 if __name__ == "__main__":
 
@@ -88,7 +90,12 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
 
     print(args)
+
+    if args.command in ['list-topics', 'backup']: # Commands that require --bootstrap-servers option
+        BOOTSTRAP_SERVERS = args.bootstrap_servers or os.getenv('KAFKA_BOOTSTRAP_SERVERS') or 'localhost:29092'
+
     if args.command == 'backup':
+
         if not args.topics and not args.topics_regex:
             print('ERROR: at least one of --topic or --topics-regex must be specified')
             exit()
@@ -112,12 +119,13 @@ if __name__ == "__main__":
         # Create the task that backups the topics data
         topic_backup_consumer = TopicBackupConsumer()
 
-
         x = threading.Thread(target=topic_backup_consumer.start, args=(topics_to_backup,))
         x.start()
 
         while not exit_signal:
-            time.sleep(1)
+            time.sleep(1) # We need to stay in the main thread for the SIGINT signal to be caught
+        
+        # If we get here, an exit signal was caught
         
         topic_backup_consumer.stop()
 
