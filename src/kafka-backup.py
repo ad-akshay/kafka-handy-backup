@@ -1,21 +1,11 @@
 #! ../venv/Scripts/python
-import re
-from confluent_kafka import Producer, Consumer, TopicPartition, OFFSET_BEGINNING, OFFSET_END, OFFSET_INVALID, OFFSET_STORED
+import argparse, re, signal
+from confluent_kafka import Producer, Consumer, TopicPartition
 from confluent_kafka.admin import AdminClient
-
+from TopicBackupConsumer import TopicBackupConsumer
 from utils import ConsumerDetails, ConsumerOffset, PartitionDetails, TopicDetails
 
-
-
-TOPIC_NAME = 'test-topic-abc'
-
 BOOTSTRAP_SERVERS = 'localhost:29092'
-CLIENT_ID = 'kafka-backup.py'
-
-producer = Producer({
-    'bootstrap.servers': BOOTSTRAP_SERVERS,
-    'client.id': CLIENT_ID
-})
 
 consumer = Consumer({
     'group.id': 'kafka-backup',
@@ -27,16 +17,14 @@ admin = AdminClient({
     'bootstrap.servers': BOOTSTRAP_SERVERS,
 })
 
-
 def list_consumer_groups():
     """Return the id of all active consumer groups"""
     group_meta = admin.list_groups(timeout=10) # List all active consumer groups
     return [d.id for d in group_meta]
 
 
-def topics_details():
+def list_topics():
     """Retreive topics details (paritions, offsets, etc.)"""
-
     topics_details = {}
     cluster_meta = admin.list_topics(timeout=5) # Get info for this topic
     for t in cluster_meta.topics.values():
@@ -57,11 +45,11 @@ def topics_details():
 def consumer_group_details():
     """Retreive consumer details"""
 
-    # consumer_goups = list_consumer_groups()
-    topics = topics_details()
+    consumer_goups = list_consumer_groups()
+    topics = list_topics()
 
     details = {}
-    for id in ['kafka-backup']: # Consumer group IDs
+    for id in consumer_goups: # Consumer group IDs
         c = Consumer({
             'group.id': id,
             'bootstrap.servers': BOOTSTRAP_SERVERS,
@@ -76,72 +64,6 @@ def consumer_group_details():
     return details
 
 
-def produceMessages(count = 100):
-    print(f'Producing {count} messages in {TOPIC_NAME}')
-    for i in range(0, count):
-        producer.produce(TOPIC_NAME, key=f'key{i}', value=f'value{i}')
-    producer.flush()
-
-def offsetToStr(offset):
-    if offset> 0:
-        return str(offset)
-    elif offset == OFFSET_STORED:
-        return 'STORED'
-    elif offset == OFFSET_BEGINNING:
-        return 'BEGINNING'
-    elif offset == OFFSET_INVALID:
-        return 'INVALID'
-    elif offset == OFFSET_END:
-        return 'END'
-    else:
-        return 'unknown'
-
-def consumeOffsetTopic(count = 5):
-    c = Consumer({
-        'group.id': 'kafka-backup',
-        'bootstrap.servers': BOOTSTRAP_SERVERS,
-        'auto.offset.reset': 'smallest'
-    })
-
-    c.subscribe(['__consumer_offsets'])
-
-    # c.seek(TopicPartition('__consumer_offsets')
-    for i in range(0, count):
-        msg = c.poll(10)
-
-        if msg is None:
-            print(f'{i} >> Consumer: Timeout polling for message')
-        elif msg.error():
-            print(f'Error reading message')
-        else:
-            print(f'{i} ({msg.partition()}:{msg.offset()}) >> ts={msg.timestamp()[1]} key={msg.key()} value={msg.value()[0:50]}')
-
-    c.close()
-
-
-def consumeMessages(count = 1):
-
-    def print_assignment(consumer, partitions):
-        print('Assignment:', [f'topic={p.topic} offset={offsetToStr(p.offset)} partition={p.partition}' for p in partitions])
-        partitions = consumer.committed([TopicPartition(TOPIC_NAME, 0)])
-        print('Comitted:', [f'topic={p.topic} offset={offsetToStr(p.offset)} partition={p.partition}' for p in partitions])
-        
-    consumer.subscribe([TOPIC_NAME], on_assign=print_assignment)
-
-    for i in range(0, count):
-        msg = consumer.poll(10.0)
-
-        if msg is None:
-            print(f'{i} >> Consumer: Timeout polling for message')
-        elif msg.error():
-            print(f'Error reading message {msg.error()}')
-        else:
-            print(f'{i} ({msg.partition()}:{msg.offset()}) >> offset={msg.offset()} length={len(msg)} partition={msg.partition()} ts={msg.timestamp()[1]} value={msg.value()}')
-
-    consumer.commit()
-
-
-import argparse
 
 parser = argparse.ArgumentParser()
 subparsers = parser.add_subparsers(dest='command')
@@ -155,6 +77,7 @@ p2 = subparsers.add_parser('list-topics')
 
 args = parser.parse_args()
 
+
 if __name__ == "__main__":
 
     print(args)
@@ -163,7 +86,7 @@ if __name__ == "__main__":
             print('ERROR: at least one of --topic or --topics-regex must be specified')
             exit()
         
-        existing_topics = topics_details()
+        existing_topics = list_topics()
 
         # Build the list of topics to backup
         topics_to_backup = []
@@ -179,23 +102,18 @@ if __name__ == "__main__":
             print('No topic to backup')
             exit()
 
-        # Create a
+        # Create the task that backups the topics data
+        topic_backup_consumer = TopicBackupConsumer()
+
+        def signal_handler(sig, frame):
+            topic_backup_consumer.stop()
+        signal.signal(signal.SIGINT, signal_handler)
+
+        topic_backup_consumer.start(topics_to_backup) # Blocks
+
 
     elif args.command == 'list-topics':
-        for t in topics_details().values():
+        for t in list_topics().values():
             print(f'- {t.name} ({len(t.partitions)} partitions)')
     else:
         parser.print_help()
-    
-    # consumeMessages()
-    # consumeOffsetTopic()
-    # produceMessages(123)
-    # printInfo()
-    # topics = topics_details()
-    # consumers = consumer_group_details()
-
-    # print(topics)
-    # print(consumers)
-
-    # print('Closing consumer')
-    # consumer.close()
