@@ -22,18 +22,11 @@ class Storage:
         # Target stream for this message (topic + partition)
         stream_id = f"{msg.topic()}/{msg.partition()}"
         
-        # Ensure stream exists
-        if stream_id not in self.streams:
-            self.create_stream(stream_id, msg)
-
-        stream = self.streams[stream_id]
+        # Get the stream (or create it if needed)
+        stream = self.streams.get(stream_id, self.create_stream(stream_id, msg))
         
         # Encode the message
         encoded_msg = self.encoder.encode_message(msg)
-
-        # if encoded_msg is None:
-        #     print('ERROR encoding message')
-        #     return
 
         # Write the encoded message to the stream : | size (uint32) | encoded_msg ([size] bytes) |
         print(f'Writing message {msg.offset()} to {stream_id}')
@@ -59,6 +52,8 @@ class Storage:
             # Write file header (info about the contained data)
             stream.write(pack('<H', len(header)))       # Header size (uint16, le)
             stream.write(header)                        # Header content (CBOR)
+
+            return stream
 
     def close_stream(self, stream_id):
         if stream_id in self.streams:
