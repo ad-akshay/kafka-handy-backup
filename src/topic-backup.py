@@ -2,11 +2,9 @@
 # Kafka consumer that backups the topic messages
 #
 
-from mimetypes import init
-from pydoc_data.topics import topics
 import signal
 from confluent_kafka import Consumer, TopicPartition
-from FileStream import FileStream
+from Storage import Storage
 from utils import offsetToStr
 from struct import *
 
@@ -14,28 +12,26 @@ TOPIC_LIST = ['test-topic-2', 'test-topic-1']
 BOOTSTRAP_SERVERS = 'localhost:29092'
 
 
-
 class TopicBackupConsumer:
 
     consumer = None
     exit_task = False
 
-    stream = FileStream('backup')
-
-    def __init__(self, topics_to_backup = None):
+    def __init__(self, topics_to_backup = None, stream = Storage('backup')):
         self.topics_list = topics_to_backup
+        self.stream = stream
 
     # Consumer callbacks
 
     def on_assign(self, consumer, partitions):
         partitions = consumer.committed(partitions) # Get the real offsets
-        print('on_assign:', [f'topic={p.topic} offset={offsetToStr(p.offset)} partition={p.partition}' for p in partitions])
+        print('on_assign:', [f'{p.topic}/{p.partition} offset={offsetToStr(p.offset)}' for p in partitions])
 
     def on_revoke(self, consumer, partitions):
-        print('on_revoke:', [f'topic={p.topic} offset={offsetToStr(p.offset)} partition={p.partition}' for p in partitions])
+        print('on_revoke:', [f'{p.topic}/{p.partition} offset={offsetToStr(p.offset)}' for p in partitions])
 
     def on_lost(self, consumer, partitions):
-        print('on_revoke:', [f'topic={p.topic} offset={offsetToStr(p.offset)} partition={p.partition}' for p in partitions])
+        print('on_revoke:', [f'{p.topic}/{p.partition} offset={offsetToStr(p.offset)}' for p in partitions])
 
     # Tasks control
 
@@ -74,15 +70,13 @@ class TopicBackupConsumer:
                     self.stream.backup_message(m)
 
                     consumer.commit(message=m) # TODO: Use the offsets instead
-
                     # consumer.commit(offsets=[TopicPartition(m.topic(), m.partition(), m.offset())]) # TODO: Use the offset
 
-        print('Closing consumer')
+        print('Stopping task')
         consumer.close()
-        print('Closing consumer - done')
         self.stream.close()
 
-    
+
 if __name__ == "__main__":
     # Capture interrupt to clean exit
     def signal_handler(sig, frame):
@@ -92,5 +86,3 @@ if __name__ == "__main__":
 
     a = TopicBackupConsumer(TOPIC_LIST)
     a.start()
-
-    print('End of script')
