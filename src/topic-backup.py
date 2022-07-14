@@ -6,11 +6,11 @@ import json
 from mimetypes import init
 import os
 from pydoc_data.topics import topics
-import signal, sys
+import signal
 from confluent_kafka import Consumer, TopicPartition
 from utils import offsetToStr
 from struct import *
-from pathlib import Path
+import cbor2
 
 
 TOPIC_LIST = ['test-topic-2', 'test-topic-1']
@@ -103,7 +103,7 @@ class TopicBackupConsumer:
 
             # Write file header
             header = json.dumps({ 
-                'encoding': 'json',
+                'encoding': 'cbor',
                 'offset': msg.offset(),
                 'timestamp': msg.timestamp()[1]
                 # 'encryption' 'compression'
@@ -119,14 +119,14 @@ class TopicBackupConsumer:
         
         # Encode the message
         obj_msg = {
-            'value': msg.value().decode(),
+            'value': msg.value(),
             'offset': msg.offset(),
-            'key': msg.key().decode(),
+            'key': msg.key(),
             'timestamp': msg.timestamp()[1],
             'headers': msg.headers()
         }
 
-        encoded_msg = json.dumps(obj_msg).encode()
+        encoded_msg = cbor2.dumps(obj_msg)
 
         # Write the message to the stream : | size (uint32) | encoded_msg ([size] bytes) |
         print(f'Writing message {msg.offset()} to {stream_id}')
