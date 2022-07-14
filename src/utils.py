@@ -1,4 +1,5 @@
-
+from typing import Dict, List
+from dataclasses import dataclass
 from confluent_kafka import OFFSET_BEGINNING, OFFSET_END, OFFSET_INVALID, OFFSET_STORED
 
 def offsetToStr(offset):
@@ -15,8 +16,6 @@ def offsetToStr(offset):
     else:
         return 'unknown'
 
-
-from dataclasses import dataclass
 
 @dataclass
 class PartitionDetails:

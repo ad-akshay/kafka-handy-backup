@@ -1,5 +1,5 @@
-#! /bin/python3
-from typing import Dict, List
+#! ../venv/Scripts/python
+import re
 from confluent_kafka import Producer, Consumer, TopicPartition, OFFSET_BEGINNING, OFFSET_END, OFFSET_INVALID, OFFSET_STORED
 from confluent_kafka.admin import AdminClient
 
@@ -7,7 +7,7 @@ from utils import ConsumerDetails, ConsumerOffset, PartitionDetails, TopicDetail
 
 
 
-TOPIC_NAME = 'test-topic-2'
+TOPIC_NAME = 'test-topic-abc'
 
 BOOTSTRAP_SERVERS = 'localhost:29092'
 CLIENT_ID = 'kafka-backup.py'
@@ -119,7 +119,7 @@ def consumeOffsetTopic(count = 5):
     c.close()
 
 
-def consumeMessages(count = 100):
+def consumeMessages(count = 1):
 
     def print_assignment(consumer, partitions):
         print('Assignment:', [f'topic={p.topic} offset={offsetToStr(p.offset)} partition={p.partition}' for p in partitions])
@@ -134,24 +134,68 @@ def consumeMessages(count = 100):
         if msg is None:
             print(f'{i} >> Consumer: Timeout polling for message')
         elif msg.error():
-            print(f'Error reading message')
+            print(f'Error reading message {msg.error()}')
         else:
             print(f'{i} ({msg.partition()}:{msg.offset()}) >> offset={msg.offset()} length={len(msg)} partition={msg.partition()} ts={msg.timestamp()[1]} value={msg.value()}')
 
     consumer.commit()
 
 
+import argparse
+
+parser = argparse.ArgumentParser()
+subparsers = parser.add_subparsers(dest='command')
+
+p1 = subparsers.add_parser('backup')
+p1.add_argument('--topic', '-t', dest='topics', action='append', help='Topics to backup')
+p1.add_argument('--topics-regex', type=str, help='Topics to backup')
+# p1.add_argument('--bootstrap-servers', type=str, required=True)
+
+p2 = subparsers.add_parser('list-topics')
+
+args = parser.parse_args()
+
 if __name__ == "__main__":
+
+    print(args)
+    if args.command == 'backup':
+        if not args.topics and not args.topics_regex:
+            print('ERROR: at least one of --topic or --topics-regex must be specified')
+            exit()
+        
+        existing_topics = topics_details()
+
+        # Build the list of topics to backup
+        topics_to_backup = []
+        for topic in existing_topics:
+            if args.topics is not None and topic in args.topics:
+                topics_to_backup.append(topic)
+            elif args.topics_regex is not None and re.match(args.topics_regex, topic):
+                topics_to_backup.append(topic)
+
+        print(f"Found {len(topics_to_backup)} topics to backup:", topics_to_backup)
+        
+        if len(topics_to_backup) == 0:
+            print('No topic to backup')
+            exit()
+
+        # Create a
+
+    elif args.command == 'list-topics':
+        for t in topics_details().values():
+            print(f'- {t.name} ({len(t.partitions)} partitions)')
+    else:
+        parser.print_help()
     
     # consumeMessages()
     # consumeOffsetTopic()
     # produceMessages(123)
     # printInfo()
-    topics = topics_details()
-    consumers = consumer_group_details()
+    # topics = topics_details()
+    # consumers = consumer_group_details()
 
-    print(topics)
-    print(consumers)
+    # print(topics)
+    # print(consumers)
 
-    print('Closing consumer')
-    consumer.close()
+    # print('Closing consumer')
+    # consumer.close()
