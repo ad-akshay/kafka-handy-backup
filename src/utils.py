@@ -16,3 +16,27 @@ def offsetToStr(offset):
         return 'unknown'
 
 
+from dataclasses import dataclass
+
+@dataclass
+class PartitionDetails:
+    id: int
+    minOffset: int
+    maxOffset: int
+
+@dataclass
+class TopicDetails:
+    name: str
+    partitions: List[PartitionDetails]
+
+@dataclass
+class ConsumerOffset:
+    topic: str
+    partition: int
+    committedOffset: int
+
+@dataclass
+class ConsumerDetails:
+    group_id: str
+    offsets: List # [topic][partition]
+

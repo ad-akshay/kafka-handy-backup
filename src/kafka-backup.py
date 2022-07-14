@@ -2,32 +2,10 @@
 from typing import Dict, List
 from confluent_kafka import Producer, Consumer, TopicPartition, OFFSET_BEGINNING, OFFSET_END, OFFSET_INVALID, OFFSET_STORED
 from confluent_kafka.admin import AdminClient
-from time import sleep
 
-from dataclasses import dataclass
+from utils import ConsumerDetails, ConsumerOffset, PartitionDetails, TopicDetails
 
 
-@dataclass
-class PartitionDetails:
-    id: int
-    minOffset: int
-    maxOffset: int
-
-@dataclass
-class TopicDetails:
-    name: str
-    partitions: List[PartitionDetails]
-
-@dataclass
-class ConsumerOffset:
-    topic: str
-    partition: int
-    committedOffset: int
-
-@dataclass
-class ConsumerDetails:
-    group_id: str
-    offsets: List # [topic][partition]
 
 TOPIC_NAME = 'test-topic-2'
 
