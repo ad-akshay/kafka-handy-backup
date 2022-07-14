@@ -36,6 +36,7 @@ class TopicBackupConsumer:
     # Tasks control
 
     def stop(self):
+        print('Stop signal received')
         self.exit_task = True
 
     def start(self, topics_to_backup = None):

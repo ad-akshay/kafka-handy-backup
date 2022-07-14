@@ -1,5 +1,5 @@
 #! ../venv/Scripts/python
-import argparse, re, signal
+import argparse, re, signal, threading, time
 from confluent_kafka import Producer, Consumer, TopicPartition
 from confluent_kafka.admin import AdminClient
 from TopicBackupConsumer import TopicBackupConsumer
@@ -80,6 +80,13 @@ args = parser.parse_args()
 
 if __name__ == "__main__":
 
+    exit_signal = False
+    def signal_handler(sig, frame):
+        print('Ctrl+C')
+        global exit_signal
+        exit_signal = True
+    signal.signal(signal.SIGINT, signal_handler)
+
     print(args)
     if args.command == 'backup':
         if not args.topics and not args.topics_regex:
@@ -105,11 +112,14 @@ if __name__ == "__main__":
         # Create the task that backups the topics data
         topic_backup_consumer = TopicBackupConsumer()
 
-        def signal_handler(sig, frame):
-            topic_backup_consumer.stop()
-        signal.signal(signal.SIGINT, signal_handler)
 
-        topic_backup_consumer.start(topics_to_backup) # Blocks
+        x = threading.Thread(target=topic_backup_consumer.start, args=(topics_to_backup,))
+        x.start()
+
+        while not exit_signal:
+            time.sleep(1)
+        
+        topic_backup_consumer.stop()
 
 
     elif args.command == 'list-topics':
