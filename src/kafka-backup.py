@@ -66,28 +66,33 @@ def consumer_group_details():
     return details
 
 
-
+# Define command line arguments
 parser = argparse.ArgumentParser()
 subparsers = parser.add_subparsers(dest='command')
 
+# "backup" command parser
 p1 = subparsers.add_parser('backup')
 p1.add_argument('--topic', '-t', dest='topics', action='append', help='Topics to backup')
 p1.add_argument('--topics-regex', type=str, help='Topics to backup')
 p1.add_argument('--bootstrap-servers', type=str)
 
+# "list-topics" command parser
 p2 = subparsers.add_parser('list-topics')
 p2.add_argument('--bootstrap-servers', type=str)
 
+# Parse the input arguments
 args = parser.parse_args()
 
 if __name__ == "__main__":
 
+    # Capture system signals to implement graceful exit
     exit_signal = False
     def signal_handler(sig, frame):
-        print('Ctrl+C')
+        print('signal', sig)
         global exit_signal
         exit_signal = True
-    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)    # Ctrl+C
+    signal.signal(signal.SIGTERM, signal_handler)   # Termination
 
     print(args)
 
@@ -126,7 +131,7 @@ if __name__ == "__main__":
             time.sleep(1) # We need to stay in the main thread for the SIGINT signal to be caught
         
         # If we get here, an exit signal was caught
-        
+
         topic_backup_consumer.stop()
 
 
