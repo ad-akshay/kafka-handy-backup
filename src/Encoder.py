@@ -1,26 +1,38 @@
-import cbor2
+import cbor2, bz2
 
 AVAILABLE_ENCODERS = ['cbor']
+AVAILABLE_COMPRESSORS = ['bz2']
 
 class Encoder:
 
-    def __init__(self, encoder = 'cbor'):
-        self.encoder = encoder
+    def __init__(self, encoding = 'cbor', compression = None):
+        self.encoder = encoding
+        self.compression = compression
 
-        if self.encoder not in AVAILABLE_ENCODERS:
-            print(f'ERROR: Unknown encoder "{encoder}"')
-
-    def encode_message(self, msg):
-        """Encodes a message. Returns a byte array."""
-
+    def encode(self, msg):
+        """Encode the message into a byte array"""
         if self.encoder == 'cbor':
             # Create an object with all the message details we need to save
             obj_msg = {
-                'value': msg.value(),
-                'offset': msg.offset(),
-                'key': msg.key(),
-                'timestamp': msg.timestamp()[1],
-                'headers': msg.headers()
+                # We use single letters keys to reduce the number of resulting bytes
+                'v': msg.value(),
+                'o': msg.offset(),
+                'k': msg.key(),
+                't': msg.timestamp()[1],
+                'h': msg.headers()
             }
 
             return cbor2.dumps(obj_msg)
+
+
+    def compress(self, bytes):
+        """Compress the given byte array"""
+        if self.compression == 'bz2':
+            return bz2.compress(bytes)
+        else:
+            return bytes
+
+
+    def encode_message(self, msg):
+        """Encodes a message into an optionally compressed and encrypted byte array"""
+        return self.compress(self.encode(msg))

@@ -14,12 +14,12 @@ class Storage:
 
     streams = {}
 
-    def __init__(self, base_path, max_chunk_size):
+    def __init__(self, base_path, max_chunk_size, compression):
         print(f'Configuring storage (base_path={base_path} max_chunk_size={max_chunk_size})')
         self.base_path = base_path
         self.max_chunk_size = max_chunk_size
 
-        self.encoder = Encoder('cbor')
+        self.encoder = Encoder('cbor', compression)
 
     def backup_message(self, msg):
         """Back up the given message to the proper stream (based on its topic and partition)"""
@@ -57,7 +57,8 @@ class Storage:
             header = cbor2.dumps({ 
                 'encoding': 'cbor',                 # How the messages are encoded
                 'offset': msg.offset(),             # Min offset
-                'timestamp': msg.timestamp()[1]     # Min timestamp
+                'timestamp': msg.timestamp()[1],    # Min timestamp
+                'compression': self.encoder.compression
             })
 
             # print('Writing files header')

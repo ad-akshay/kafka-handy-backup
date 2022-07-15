@@ -5,6 +5,7 @@ import os
 from Storage import Storage
 from TopicBackupConsumer import TopicBackupConsumer
 import Metadata
+from Encoder import AVAILABLE_COMPRESSORS
 
 
 # Define command line arguments
@@ -20,6 +21,7 @@ p1.add_argument('--max-chunk-size', type=int, default=1000000, help='Maximum siz
 p1.add_argument('--directory', type=str, default='backup', help='Output directory/container (default="backup")')
 p1.add_argument('--continuous', action='store_true', help='Continuous backup mode')
 p1.add_argument('--point-in-time-interval', type=int, default=86400, help='Point in time interval (default: 24h)')
+p1.add_argument('--compression', type=str, choices=AVAILABLE_COMPRESSORS, help='Specify compression algorithm for compressing messages')
 
 # "list-topics" command parser
 p2 = subparsers.add_parser('list-topics')
@@ -68,14 +70,20 @@ if __name__ == "__main__":
             print('No topic to backup')
             exit()
 
-        storage = Storage(args.directory, args.max_chunk_size)
+        # Configure the storage backend and encoding options
+        storage = Storage(
+            base_path=args.directory,
+            max_chunk_size=args.max_chunk_size,
+            compression=args.compression
+        )
+
         storage.backup_metadata(metadata)
 
         # Create the task that backups the topics data
         topic_backup_consumer = TopicBackupConsumer(
             storage=storage,
             bootstrap_servers=BOOTSTRAP_SERVERS
-            )
+        )
 
         offsets = {}
         for topic in topics_to_backup:
@@ -84,11 +92,13 @@ if __name__ == "__main__":
         x.start()
 
 
+        # The topic backup task is started, now we loop to wait until it finisheds or an interrupt signal is received
         elapsed_seconds = 0
         while not exit_signal and x.is_alive():
             time.sleep(1) # We need to stay in the main thread for the SIGINT signal to be caught
             
             # In continuous mode, we want to backup the metadata at periodic intervals
+            # The metadata backup are the different point-in-time at which we can restore our data
             if args.continuous:
                 elapsed_seconds = elapsed_seconds + 1
                 if elapsed_seconds >= args.point_in_time_interval:
@@ -96,7 +106,7 @@ if __name__ == "__main__":
                     storage.backup_metadata(metadata)
                     elapsed_seconds = 0
         
-        # If we get here, an exit signal was caught
+        # If we get here, an exit signal was caught or the topic backup task is done
 
         topic_backup_consumer.stop()
 
