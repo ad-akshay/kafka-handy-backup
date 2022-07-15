@@ -3,6 +3,7 @@
 #
 
 import signal
+from typing import Dict, List
 from confluent_kafka import Consumer, TopicPartition
 from utils import offsetToStr
 from struct import *
@@ -12,6 +13,8 @@ class TopicBackupConsumer:
 
     consumer = None
     exit_task = False
+    assigned_partitions = -1
+    completed_partitions = 0
 
     def __init__(self, storage, bootstrap_servers):
         self.storage = storage
@@ -20,13 +23,19 @@ class TopicBackupConsumer:
     # Consumer callbacks
 
     def on_assign(self, consumer, partitions):
-        partitions = consumer.committed(partitions) # Get the real offsets
+        if self.assigned_partitions == -1: self.assigned_partitions = 0
+        self.assigned_partitions = self.assigned_partitions + len(partitions)
+        partitions = consumer.committed(partitions) # Get the real consumer offsets
         print('on_assign:', [f'{p.topic}/{p.partition} offset={offsetToStr(p.offset)}' for p in partitions])
 
     def on_revoke(self, consumer, partitions):
+        self.assigned_partitions = self.assigned_partitions - len(partitions)
+        self.completed_partitions = self.completed_partitions - len(partitions)
         print('on_revoke:', [f'{p.topic}/{p.partition} offset={offsetToStr(p.offset)}' for p in partitions])
 
     def on_lost(self, consumer, partitions):
+        self.assigned_partitions = self.assigned_partitions - len(partitions)
+        self.completed_partitions = self.completed_partitions - len(partitions)
         print('on_revoke:', [f'{p.topic}/{p.partition} offset={offsetToStr(p.offset)}' for p in partitions])
 
     # Tasks control
@@ -35,10 +44,7 @@ class TopicBackupConsumer:
         print('Stop signal received')
         self.exit_task = True
 
-    def start(self, topics_to_backup = None):
-
-        if topics_to_backup != None:
-            self.topics_list = topics_to_backup
+    def start(self, topics_to_backup: List[str], offsets):
 
         consumer = Consumer({
             'group.id': 'kafka-backup-topic',
@@ -47,7 +53,24 @@ class TopicBackupConsumer:
             'enable.auto.commit': False
         })
 
-        consumer.subscribe(self.topics_list, on_assign=self.on_assign, on_revoke=self.on_revoke, on_lost=self.on_lost)
+        # Filter out the topics that have no new messages since last backup
+        topic_list = []
+        for topic in topics_to_backup:
+            for p in offsets[topic]:
+                maxOffset = offsets[topic][p]
+                partition = consumer.committed([TopicPartition(topic, p)])
+                print(f'{topic} : committed={partition[0].offset} max={maxOffset}')
+                if maxOffset > partition[0].offset:
+                    topic_list.append(topic)
+                    break
+
+        if len(topic_list) == 0:
+            print('All topics already backed up')
+            consumer.close()
+            return
+
+        print('Subscribint to:', topic_list)
+        consumer.subscribe(topic_list, on_assign=self.on_assign, on_revoke=self.on_revoke, on_lost=self.on_lost)
 
         while True:
             messages = consumer.consume(timeout=3) # Get messages in batch
@@ -56,18 +79,32 @@ class TopicBackupConsumer:
                 break
 
             # if len(messages) == 0:
-            #     print('Timeout without messages')
+            #     print(f'Timeout without messages (topic_count={topic_count} assigned_partitions={self.assigned_partitions})')
 
             for m in messages:
                 if m.error():
                     print('Message error', m.error())
                 else:
-                    # Valid message
-                    # print(f'{m.topic()}:{m.partition()} {m.offset()}')
+                    # The maxOffset if defined is our backup stop point
+                    maxOffset = offsets[m.topic()][m.partition()]
+                    # print(f'maxOffset={maxOffset} m.offset={m.offset()}')
+                    if maxOffset is not None and m.offset() >= (maxOffset - 1):
+                        # Stop consuming from this partition
+                        consumer.pause([TopicPartition(m.topic(), m.partition())])
+                        self.completed_partitions = self.completed_partitions + 1
+                        print(f'Finished backing up {m.topic()}:{m.partition()} (assigned={self.assigned_partitions} paused={self.completed_partitions})')
+                        if m.offset() > maxOffset:
+                            continue # Ignore messages in the batch that are above the max offset
+
                     self.storage.backup_message(m)
 
                     consumer.commit(message=m) # TODO: Use the offsets instead
                     # consumer.commit(offsets=[TopicPartition(m.topic(), m.partition(), m.offset())]) # TODO: Use the offset
+
+            if self.completed_partitions == self.assigned_partitions:
+                # We are done backing up the topics
+                print('All topics are backed up')
+                break
 
         print('Stopping task')
         consumer.close()

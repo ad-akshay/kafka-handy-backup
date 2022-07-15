@@ -54,11 +54,11 @@ if __name__ == "__main__":
 
         # Build the list of topics to backup
         topics_to_backup = []
-        for topic in existing_topics:
-            if args.topics is not None and topic in args.topics:
-                topics_to_backup.append(topic)
-            elif args.topics_regex is not None and re.match(args.topics_regex, topic):
-                topics_to_backup.append(topic)
+        for topic_name in existing_topics:
+            if args.topics is not None and topic_name in args.topics:
+                topics_to_backup.append(topic_name)
+            elif args.topics_regex is not None and re.match(args.topics_regex, topic_name):
+                topics_to_backup.append(topic_name)
 
         print(f"Found {len(topics_to_backup)} topics to backup:", topics_to_backup)
 
@@ -75,12 +75,15 @@ if __name__ == "__main__":
             bootstrap_servers=BOOTSTRAP_SERVERS
             )
 
-        x = threading.Thread(target=topic_backup_consumer.start, args=(topics_to_backup,))
+        offsets = {}
+        for topic in topics_to_backup:
+            offsets[topic] = { p.id: p.maxOffset for p in existing_topics[topic].partitions }
+        x = threading.Thread(target=topic_backup_consumer.start, args=(topics_to_backup, offsets,))
         x.start()
 
-        while not exit_signal:
+
+        while not exit_signal and x.is_alive():
             time.sleep(1) # We need to stay in the main thread for the SIGINT signal to be caught
-            # print('is_alive():', x.is_alive())
         
         # If we get here, an exit signal was caught
 
