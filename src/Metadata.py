@@ -5,6 +5,7 @@ Class in charge of reading the metadata (consumer offset, topics details) at poi
 from dataclasses import asdict
 from math import floor
 import time
+from typing import List
 from confluent_kafka import Consumer, TopicPartition
 from confluent_kafka.admin import AdminClient
 from utils import ConsumerDetails, ConsumerOffset, Metadata, PartitionDetails, TopicDetails
@@ -17,7 +18,7 @@ def list_consumer_groups(bootstrap_servers):
     return [d.id for d in group_meta]
 
 
-def topics_details(bootstrap_servers):
+def topics_details(bootstrap_servers) -> List[TopicDetails]:
     """Retreive topics details (paritions, offsets, etc.)"""
     admin = AdminClient({'bootstrap.servers': bootstrap_servers})
     consumer = Consumer({
@@ -44,7 +45,7 @@ def topics_details(bootstrap_servers):
 
     return topics_details
 
-def consumer_details(bootstrap_servers):
+def consumer_details(bootstrap_servers) -> List[ConsumerDetails]:
     """Retreive consumer details"""
 
     consumer_goups = list_consumer_groups(bootstrap_servers)
