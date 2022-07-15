@@ -18,11 +18,13 @@ p1.add_argument('--topics-regex', type=str, help='Topics to backup')
 p1.add_argument('--bootstrap-servers', type=str)
 p1.add_argument('--max-chunk-size', type=int, default=1000000, help='Maximum size of chunk (files) in bytes (default = 1Gb)')
 p1.add_argument('--directory', type=str, default='backup', help='Output directory/container (default="backup")')
+p1.add_argument('--continuous', action='store_true', help='Continuous backup mode')
+p1.add_argument('--point-in-time-interval', type=int, default=86400, help='Point in time interval (default: 24h)')
 
 # "list-topics" command parser
 p2 = subparsers.add_parser('list-topics')
 p2.add_argument('--bootstrap-servers', type=str)
-p2.add_argument('--details', action='store_true')
+p2.add_argument('--details', action='store_true', help='Show partition details')
 
 # Parse the input arguments
 args = parser.parse_args()
@@ -78,12 +80,21 @@ if __name__ == "__main__":
         offsets = {}
         for topic in topics_to_backup:
             offsets[topic] = { p.id: p.maxOffset for p in existing_topics[topic].partitions }
-        x = threading.Thread(target=topic_backup_consumer.start, args=(topics_to_backup, offsets,))
+        x = threading.Thread(target=topic_backup_consumer.start, args=(topics_to_backup, offsets, args.continuous))
         x.start()
 
 
+        elapsed_seconds = 0
         while not exit_signal and x.is_alive():
             time.sleep(1) # We need to stay in the main thread for the SIGINT signal to be caught
+            
+            # In continuous mode, we want to backup the metadata at periodic intervals
+            if args.continuous:
+                elapsed_seconds = elapsed_seconds + 1
+                if elapsed_seconds >= args.point_in_time_interval:
+                    metadata = Metadata.read_metadata(BOOTSTRAP_SERVERS)
+                    storage.backup_metadata(metadata)
+                    elapsed_seconds = 0
         
         # If we get here, an exit signal was caught
 
