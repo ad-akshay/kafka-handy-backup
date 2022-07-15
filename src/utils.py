@@ -21,11 +21,22 @@ class PartitionDetails:
     id: int
     minOffset: int
     maxOffset: int
+    replicas: int
+
+    def __repr__(self):
+        return f'Partition {self.id}: minOffset={self.minOffset} maxOffset={self.maxOffset} replicas={self.replicas} ({self.maxOffset - self.minOffset} messages)'
 
 @dataclass
 class TopicDetails:
     name: str
     partitions: List[PartitionDetails]
+
+    def friendly(self):
+        text = 'Topic: ' + self.name
+        for p in self.partitions:
+            text += f'\n  - {str(p)}'
+
+        return text
 
 @dataclass
 class ConsumerOffset:
@@ -36,5 +47,10 @@ class ConsumerOffset:
 @dataclass
 class ConsumerDetails:
     group_id: str
-    offsets: List # [topic][partition]
+    offsets: List[ConsumerOffset] # [topic][partition]
 
+@dataclass
+class Metadata:
+    timestamp: int
+    consumers: Dict
+    topics: Dict
