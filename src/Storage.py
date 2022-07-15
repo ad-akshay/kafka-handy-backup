@@ -42,7 +42,7 @@ class Storage:
             stream = self.create_stream(stream_id, msg)
 
         # Write the encoded message to the stream : | size (uint32) | encoded_msg ([size] bytes) |
-        print(f'Writing message {msg.offset()} to {stream_id}')
+        # print(f'Writing message {msg.offset()} to {stream_id}')
         stream.write(pack('<H', length))
         stream.write(encoded_msg)
 
@@ -60,7 +60,7 @@ class Storage:
                 'timestamp': msg.timestamp()[1]     # Min timestamp
             })
 
-            print('Writing files header')
+            # print('Writing files header')
             # Write file header (info about the contained data)
             stream.write(pack('<H', len(header)))       # Header size (uint16, le)
             stream.write(header)                        # Header content (CBOR)

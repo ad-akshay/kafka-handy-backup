@@ -8,7 +8,7 @@ class FileStream:
 
     def __init__(self, backup_directory , path):
         filePath = backup_directory + '/' + path
-        print(f'Creating FileStream at {filePath}')
+        print(f'Creating {filePath}')
         os.makedirs(os.path.dirname(filePath), exist_ok=True) # Create missing directories
         self._size = 0
         self.file = open(filePath , 'wb')

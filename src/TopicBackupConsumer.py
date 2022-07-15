@@ -26,17 +26,17 @@ class TopicBackupConsumer:
         if self.assigned_partitions == -1: self.assigned_partitions = 0
         self.assigned_partitions = self.assigned_partitions + len(partitions)
         partitions = consumer.committed(partitions) # Get the real consumer offsets
-        print('on_assign:', [f'{p.topic}/{p.partition} offset={offsetToStr(p.offset)}' for p in partitions])
+        print('on_assign:', [f'{p.topic}:{p.partition} offset={offsetToStr(p.offset)}' for p in partitions])
 
     def on_revoke(self, consumer, partitions):
         self.assigned_partitions = self.assigned_partitions - len(partitions)
         self.completed_partitions = self.completed_partitions - len(partitions)
-        print('on_revoke:', [f'{p.topic}/{p.partition} offset={offsetToStr(p.offset)}' for p in partitions])
+        print('on_revoke:', [f'{p.topic}:{p.partition}' for p in partitions])
 
     def on_lost(self, consumer, partitions):
         self.assigned_partitions = self.assigned_partitions - len(partitions)
         self.completed_partitions = self.completed_partitions - len(partitions)
-        print('on_revoke:', [f'{p.topic}/{p.partition} offset={offsetToStr(p.offset)}' for p in partitions])
+        print('on_revoke:', [f'{p.topic}:{p.partition}' for p in partitions])
 
     # Tasks control
 
