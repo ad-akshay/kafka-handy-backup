@@ -11,8 +11,10 @@ class Storage:
 
     streams = {}
 
-    def __init__(self, base_path):
+    def __init__(self, base_path, max_chunk_size):
+        print(f'Configuring storage (base_path={base_path} max_chunk_size={max_chunk_size})')
         self.base_path = base_path
+        self.max_chunk_size = max_chunk_size
 
         self.encoder = Encoder('cbor')
 
@@ -27,10 +29,18 @@ class Storage:
         
         # Encode the message
         encoded_msg = self.encoder.encode_message(msg)
+        length = len(encoded_msg)
+
+        # Make sure we would not exceed the max_chunk_size
+        if stream.size() + length > self.max_chunk_size:
+            # We would exceed, so create a new stream for this topic/partition
+            print(f'Closing {stream.file.name} (reaching max chunk size)')
+            self.close_stream(stream_id)
+            stream = self.create_stream(stream_id, msg)
 
         # Write the encoded message to the stream : | size (uint32) | encoded_msg ([size] bytes) |
         print(f'Writing message {msg.offset()} to {stream_id}')
-        stream.write(pack('<H', len(encoded_msg)))
+        stream.write(pack('<H', length))
         stream.write(encoded_msg)
 
 

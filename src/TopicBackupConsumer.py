@@ -4,12 +4,8 @@
 
 import signal
 from confluent_kafka import Consumer, TopicPartition
-from Storage import Storage
 from utils import offsetToStr
 from struct import *
-
-TOPIC_LIST = ['test-topic-2', 'test-topic-1']
-BOOTSTRAP_SERVERS = 'localhost:29092'
 
 
 class TopicBackupConsumer:
@@ -17,9 +13,9 @@ class TopicBackupConsumer:
     consumer = None
     exit_task = False
 
-    def __init__(self, topics_to_backup = None, stream = Storage('backup')):
-        self.topics_list = topics_to_backup
-        self.stream = stream
+    def __init__(self, storage, bootstrap_servers):
+        self.storage = storage
+        self.bootstrap_servers = bootstrap_servers
 
     # Consumer callbacks
 
@@ -46,7 +42,7 @@ class TopicBackupConsumer:
 
         consumer = Consumer({
             'group.id': 'kafka-backup-topic',
-            'bootstrap.servers': BOOTSTRAP_SERVERS,
+            'bootstrap.servers': self.bootstrap_servers,
             'auto.offset.reset': 'smallest',
             'enable.auto.commit': False
         })
@@ -68,14 +64,14 @@ class TopicBackupConsumer:
                 else:
                     # Valid message
                     # print(f'{m.topic()}:{m.partition()} {m.offset()}')
-                    self.stream.backup_message(m)
+                    self.storage.backup_message(m)
 
                     consumer.commit(message=m) # TODO: Use the offsets instead
                     # consumer.commit(offsets=[TopicPartition(m.topic(), m.partition(), m.offset())]) # TODO: Use the offset
 
         print('Stopping task')
         consumer.close()
-        self.stream.close()
+        self.storage.close()
 
 
 if __name__ == "__main__":
@@ -85,5 +81,5 @@ if __name__ == "__main__":
         a.stop()
     signal.signal(signal.SIGINT, signal_handler)
 
-    a = TopicBackupConsumer(TOPIC_LIST)
+    a = TopicBackupConsumer(['test-topic-2', 'test-topic-1'])
     a.start()

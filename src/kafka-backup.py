@@ -1,10 +1,11 @@
 #! ../venv/Scripts/python
 import argparse, re, signal, threading, time
 import os
-from confluent_kafka import Producer, Consumer, TopicPartition
+from confluent_kafka import Consumer, TopicPartition
 from confluent_kafka.admin import AdminClient
+from Storage import Storage
 from TopicBackupConsumer import TopicBackupConsumer
-from utils import Configuration, ConsumerDetails, ConsumerOffset, PartitionDetails, TopicDetails
+from utils import ConsumerDetails, ConsumerOffset, PartitionDetails, TopicDetails
 
 
 def list_consumer_groups():
@@ -75,6 +76,8 @@ p1 = subparsers.add_parser('backup')
 p1.add_argument('--topic', '-t', dest='topics', action='append', help='Topics to backup')
 p1.add_argument('--topics-regex', type=str, help='Topics to backup')
 p1.add_argument('--bootstrap-servers', type=str)
+p1.add_argument('--max-chunk-size', type=int, default=1000000, help='Maximum size of chunk (files) in bytes (default = 1Gb)')
+p1.add_argument('--directory', type=str, default='backup', help='Output directory/container (default="backup")')
 
 # "list-topics" command parser
 p2 = subparsers.add_parser('list-topics')
@@ -122,7 +125,10 @@ if __name__ == "__main__":
             exit()
 
         # Create the task that backups the topics data
-        topic_backup_consumer = TopicBackupConsumer()
+        topic_backup_consumer = TopicBackupConsumer(
+            storage=Storage(args.directory, args.max_chunk_size),
+            bootstrap_servers=BOOTSTRAP_SERVERS
+            )
 
         x = threading.Thread(target=topic_backup_consumer.start, args=(topics_to_backup,))
         x.start()
