@@ -1,8 +1,9 @@
 """
-Class in charge of backing up the metadata (consumer offset, topics details) at points in time
+Class in charge of reading the metadata (consumer offset, topics details) at points in time
 """
 
 from dataclasses import asdict
+from math import floor
 import time
 from confluent_kafka import Consumer, TopicPartition
 from confluent_kafka.admin import AdminClient
@@ -68,16 +69,9 @@ def consumer_details(bootstrap_servers):
 
 def read_metadata(bootstrap_servers):
     return Metadata(
-        timestamp=time.time(),
-        consumers=consumer_details(),
-        topics=topics_details()
+        timestamp=floor(time.time()),
+        consumers=consumer_details(bootstrap_servers),
+        topics=topics_details(bootstrap_servers)
     )
 
-def backup_metadata(bootstrap_servers):
-    """Make a capture of the metadata and store it to a file"""
-
-    meta = read_metadata(bootstrap_servers)
-    print(asdict(meta))
-
-    return meta
 

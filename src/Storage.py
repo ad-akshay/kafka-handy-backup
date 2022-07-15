@@ -2,10 +2,13 @@
 Interface to the storage system
 """
 
+from dataclasses import asdict
+import json
 from struct import *
 import cbor2
 from Encoder import Encoder
 from FileStream import FileStream
+from utils import Metadata
 
 class Storage:
 
@@ -43,11 +46,10 @@ class Storage:
         stream.write(pack('<H', length))
         stream.write(encoded_msg)
 
-
     def create_stream(self, stream_id, msg):
         """Create a new stream"""
         if not self.streams.get(stream_id):
-            path = f"{msg.topic()}/{msg.partition()}/{msg.offset()}_{msg.timestamp()[1]}"
+            path = f"topics/{msg.topic()}/{msg.partition()}/{msg.offset()}_{msg.timestamp()[1]}"
             stream = FileStream(self.base_path, path)
             self.streams[stream_id] = stream
 
@@ -64,6 +66,14 @@ class Storage:
             stream.write(header)                        # Header content (CBOR)
 
             return stream
+
+    def backup_metadata(self, metadata: Metadata):
+        """Backup the metadata to a file"""
+        path = f'metadata/{metadata.timestamp}'
+        file = FileStream(self.base_path, path)
+        data = json.dumps(asdict(metadata)).encode()
+        file.write(data)
+        file.close()
 
     def close_stream(self, stream_id):
         if stream_id in self.streams:

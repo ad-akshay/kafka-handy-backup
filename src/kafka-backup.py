@@ -32,7 +32,7 @@ if __name__ == "__main__":
     # Capture system signals to implement graceful exit
     exit_signal = False
     def signal_handler(sig, frame):
-        print('signal', sig)
+        print('received', 'SIGINT' if sig == signal.SIGINT else 'SIGTERM')
         global exit_signal
         exit_signal = True
     signal.signal(signal.SIGINT, signal_handler)    # Ctrl+C
@@ -48,8 +48,8 @@ if __name__ == "__main__":
         if not args.topics and not args.topics_regex:
             print('ERROR: at least one of --topic or --topics-regex must be specified')
             exit()
-        
-        metadata = Metadata.backup_metadata(BOOTSTRAP_SERVERS)
+
+        metadata = Metadata.read_metadata(BOOTSTRAP_SERVERS)
         existing_topics = metadata.topics
 
         # Build the list of topics to backup
@@ -61,14 +61,17 @@ if __name__ == "__main__":
                 topics_to_backup.append(topic)
 
         print(f"Found {len(topics_to_backup)} topics to backup:", topics_to_backup)
-        
+
         if len(topics_to_backup) == 0:
             print('No topic to backup')
             exit()
 
+        storage = Storage(args.directory, args.max_chunk_size)
+        storage.backup_metadata(metadata)
+
         # Create the task that backups the topics data
         topic_backup_consumer = TopicBackupConsumer(
-            storage=Storage(args.directory, args.max_chunk_size),
+            storage=storage,
             bootstrap_servers=BOOTSTRAP_SERVERS
             )
 
@@ -77,6 +80,7 @@ if __name__ == "__main__":
 
         while not exit_signal:
             time.sleep(1) # We need to stay in the main thread for the SIGINT signal to be caught
+            # print('is_alive():', x.is_alive())
         
         # If we get here, an exit signal was caught
 
