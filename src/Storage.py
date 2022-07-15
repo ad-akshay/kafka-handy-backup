@@ -14,12 +14,11 @@ class Storage:
 
     streams = {}
 
-    def __init__(self, base_path, max_chunk_size, compression):
+    def __init__(self, base_path, max_chunk_size, encoder):
         print(f'Configuring storage (base_path={base_path} max_chunk_size={max_chunk_size})')
         self.base_path = base_path
         self.max_chunk_size = max_chunk_size
-
-        self.encoder = Encoder('cbor', compression)
+        self.encoder = encoder
 
     def backup_message(self, msg):
         """Back up the given message to the proper stream (based on its topic and partition)"""

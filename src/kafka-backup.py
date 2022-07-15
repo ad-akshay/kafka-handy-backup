@@ -1,11 +1,10 @@
 #! ../venv/Scripts/python
-import argparse, re, signal, threading, time
+import argparse, re, signal, threading, time, os
 from dataclasses import asdict
-import os
 from Storage import Storage
 from TopicBackupConsumer import TopicBackupConsumer
 import Metadata
-from Encoder import AVAILABLE_COMPRESSORS
+from Encoder import AVAILABLE_COMPRESSORS, Encoder
 
 
 # Define command line arguments
@@ -70,11 +69,16 @@ if __name__ == "__main__":
             print('No topic to backup')
             exit()
 
-        # Configure the storage backend and encoding options
+        # Configure the encoder
+        encoder = Encoder(
+            compression=args.compression,
+        )
+
+        # Configure the storage backend
         storage = Storage(
             base_path=args.directory,
             max_chunk_size=args.max_chunk_size,
-            compression=args.compression
+            encoder=encoder
         )
 
         storage.backup_metadata(metadata)

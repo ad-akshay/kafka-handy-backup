@@ -1,4 +1,5 @@
 import cbor2, bz2
+from cryptography.fernet import Fernet
 
 AVAILABLE_ENCODERS = ['cbor']
 AVAILABLE_COMPRESSORS = ['bz2']
@@ -31,7 +32,6 @@ class Encoder:
             return bz2.compress(bytes)
         else:
             return bytes
-
 
     def encode_message(self, msg):
         """Encodes a message into an optionally compressed and encrypted byte array"""
