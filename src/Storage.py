@@ -7,7 +7,7 @@ import json
 import os
 from struct import *
 from time import strftime
-from typing import List
+from typing import Dict, List
 import cbor2
 from Encoder import Encoder
 from FileStream import Encryptor, FileStream
@@ -114,32 +114,44 @@ class Storage:
         if limit is not None and limit > 0:
             metadata_files = metadata_files[0:limit]
 
-        return [int(f.split('_')[0]) for f in metadata_files]
+        return [int(f) for f in metadata_files]
 
         # Object storage
         # TODO
 
+    def get_metadata(self, restoration_point_id: str = None) -> Metadata:
+        """Return the metadata for the given restoration point"""
 
+        if restoration_point_id is None:
+            # Default to latest
+            rp = self.list_restoration_points(limit=1)
+            if len(rp) == 0:
+                return None
+            restoration_point_id = str(rp[0])
+        
+        # Local file system
+        metadata_file_path = self.base_path + '/metadata/' + restoration_point_id
+        if not os.path.exists(metadata_file_path):
+            print(f'ERROR: Restoration point {metadata_file_path} not found')
+            return None
+        
+        with open(metadata_file_path, 'rb') as f:
+            metadata = Metadata(**json.loads(f.read()))
 
-from datetime import datetime
+        return metadata
 
-if __name__ == '__main__':
-    
-    # List the 
-    os.listdir('backup/topics')
+        # Object storage
+        # TODO
 
-    metadata_path = 'backup/metadata'
-    metadata_files = [f for f in os.listdir(metadata_path) if os.path.isfile(os.path.join(metadata_path, f))]
-    metadata_files.sort(reverse=True) # Latest first
+    def list_available_topics(self):
+        """Return a list of available (backed up) topics"""
 
-    restoration_points = []
-    for f in metadata_files:
-        epoch = int(f.split('_')[0])
-        dt = datetime.fromtimestamp(epoch)
-        print(f'{epoch} ({dt.strftime("%Y-%m-%d %H:%M:%S")})')
-        restoration_points.append({
-            'id': epoch,
-            'datetime': dt.strftime("%Y-%m-%d %H:%M:%S")
-        })
+        # Local file system
+        topics_path = self.base_path + '/topics'
+        if not os.path.exists(topics_path):
+            print(f'Topics path "{topics_path} does not exist')
+        available_topics = os.listdir(topics_path)
+        return available_topics
 
-    print(metadata_files)
+        
+
