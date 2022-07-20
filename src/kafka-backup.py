@@ -1,5 +1,6 @@
 #! ../venv/Scripts/python
 import argparse, re, signal, threading, time, os
+from base64 import encodebytes
 from dataclasses import asdict
 from Storage import Storage
 from TopicBackupConsumer import TopicBackupConsumer
@@ -21,6 +22,7 @@ p1.add_argument('--directory', type=str, default='backup', help='Output director
 p1.add_argument('--continuous', action='store_true', help='Continuous backup mode')
 p1.add_argument('--point-in-time-interval', type=int, default=86400, help='Point in time interval (default: 24h)')
 p1.add_argument('--compression', type=str, choices=AVAILABLE_COMPRESSORS, help='Specify compression algorithm for compressing messages')
+p1.add_argument('--encryption-key', type=str, help='256 bits encryption key')
 
 # "list-topics" command parser
 p2 = subparsers.add_parser('list-topics')
@@ -52,6 +54,14 @@ if __name__ == "__main__":
             print('ERROR: at least one of --topic or --topics-regex must be specified')
             exit()
 
+        encryption_key = None
+        if args.encryption_key:
+            encryption_key = args.encryption_key.encode()
+
+        if len(encryption_key) != 32:
+            print('ERROR: Encryption key must be 256 bits (32 bytes)')
+            exit()
+
         metadata = Metadata.read_metadata(BOOTSTRAP_SERVERS)
         existing_topics = metadata.topics
 
@@ -78,7 +88,8 @@ if __name__ == "__main__":
         storage = Storage(
             base_path=args.directory,
             max_chunk_size=args.max_chunk_size,
-            encoder=encoder
+            encoder=encoder,
+            encryption_key=encryption_key
         )
 
         storage.backup_metadata(metadata)

@@ -72,7 +72,7 @@ class TopicBackupConsumer:
             consumer.close()
             return
 
-        print('Subscribint to:', topic_list)
+        print('Subscribing to:', topic_list)
         consumer.subscribe(topic_list, on_assign=self.on_assign, on_revoke=self.on_revoke, on_lost=self.on_lost)
 
         while True:
