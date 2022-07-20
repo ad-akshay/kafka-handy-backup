@@ -4,7 +4,10 @@ Interface to the storage system
 
 from dataclasses import asdict
 import json
+import os
 from struct import *
+from time import strftime
+from typing import List
 import cbor2
 from Encoder import Encoder
 from FileStream import Encryptor, FileStream
@@ -93,3 +96,50 @@ class Storage:
     def close(self):
         for stream_id in self.streams:
             self.close_stream(stream_id)
+
+
+
+    #
+    #   Read functions
+    #
+
+    def list_restoration_points(self, limit) -> List[int]:
+        """Returns the list of restoration points"""
+        
+        # Local file system
+        metadata_path = self.base_path + '/metadata'
+        metadata_files = [f for f in os.listdir(metadata_path) if os.path.isfile(os.path.join(metadata_path, f))]
+        metadata_files.sort(reverse=True) # Latest first
+
+        if limit is not None and limit > 0:
+            metadata_files = metadata_files[0:limit]
+
+        return [int(f.split('_')[0]) for f in metadata_files]
+
+        # Object storage
+        # TODO
+
+
+
+from datetime import datetime
+
+if __name__ == '__main__':
+    
+    # List the 
+    os.listdir('backup/topics')
+
+    metadata_path = 'backup/metadata'
+    metadata_files = [f for f in os.listdir(metadata_path) if os.path.isfile(os.path.join(metadata_path, f))]
+    metadata_files.sort(reverse=True) # Latest first
+
+    restoration_points = []
+    for f in metadata_files:
+        epoch = int(f.split('_')[0])
+        dt = datetime.fromtimestamp(epoch)
+        print(f'{epoch} ({dt.strftime("%Y-%m-%d %H:%M:%S")})')
+        restoration_points.append({
+            'id': epoch,
+            'datetime': dt.strftime("%Y-%m-%d %H:%M:%S")
+        })
+
+    print(metadata_files)

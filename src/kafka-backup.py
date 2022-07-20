@@ -1,5 +1,6 @@
 #! ../venv/Scripts/python
 import argparse, re, signal, threading, time, os
+from datetime import datetime, timedelta
 from base64 import encodebytes
 from dataclasses import asdict
 from Storage import Storage
@@ -28,6 +29,12 @@ p1.add_argument('--encryption-key', type=str, help='256 bits encryption key')
 p2 = subparsers.add_parser('list-topics')
 p2.add_argument('--bootstrap-servers', type=str)
 p2.add_argument('--details', action='store_true', help='Show partition details')
+
+
+# "list-restoration-points" command parser
+p4 = subparsers.add_parser('list-restoration-points')
+p4.add_argument('--limit', type=int, default=10, help='Max number of lines to print')
+p4.add_argument('--directory', type=str, default='backup', help='Backup directory/container (default="backup")')
 
 # Parse the input arguments
 args = parser.parse_args()
@@ -132,5 +139,28 @@ if __name__ == "__main__":
                 print(t.friendly())
             else:
                 print(f'- {t.name} ({len(t.partitions)} partitions, {max([x.replicas for x in t.partitions])} replicas)')
+
+    elif args.command == 'list-restoration-points':
+        # Configure the storage backend
+        storage = Storage(
+            base_path=args.directory,
+            max_chunk_size=10, # Don't care here
+            encoder=Encoder(),
+            encryption_key=None
+        )
+
+        points = storage.list_restoration_points(args.limit)
+
+        for i in range(0, len(points)):
+            epoch = points[i]
+            dt = datetime.fromtimestamp(epoch)
+            diff = datetime.now() - dt
+            if diff.days == 0:
+                diff_string = str(round(diff.seconds/60/60, 1)) + ' hours'
+            else:
+                diff_string = str(diff.days) + ' days'
+
+            print(f'{i}) ts={epoch} : {dt.strftime("%Y-%m-%d %H:%M:%S")} ({diff_string} ago)')
+        
     else:
         parser.print_help()
