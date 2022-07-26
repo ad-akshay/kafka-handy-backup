@@ -1,3 +1,4 @@
+import hashlib
 from typing import Dict, List
 from dataclasses import dataclass
 from confluent_kafka import OFFSET_BEGINNING, OFFSET_END, OFFSET_INVALID, OFFSET_STORED
@@ -54,3 +55,8 @@ class Metadata:
     timestamp: int
     consumers: Dict
     topics: Dict
+
+
+def key_id(key: bytes) -> str:
+    """Generate a unique ID for a given key"""
+    return hashlib.md5(key).hexdigest()[0:10]

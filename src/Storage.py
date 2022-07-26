@@ -11,7 +11,7 @@ from typing import Dict, List
 import cbor2
 from Encoder import Encoder
 from FileStream import Encryptor, FileStream
-from utils import Metadata
+from utils import Metadata, key_id
 
 class Storage:
 
@@ -70,8 +70,9 @@ class Storage:
 
             # Add encryption details
             if stream.encryptor:
-                header['encryption'] = stream.encryptor.encryption  # Type of encryption
-                header['iv'] = stream.encryptor.iv                  # Initialization vector
+                header['encryption'] = stream.encryptor.encryption          # Type of encryption
+                header['iv'] = stream.encryptor.iv                          # Initialization vector
+                header['encryption-key-id'] = key_id(self.encryption_key)   # Store the encryption key id to identify the proper key during decryption
 
             # Write file header (unencrypted because we need the IV to decrypt)
             cbor_header = cbor2.dumps(header) # Encode to CBOR
@@ -153,5 +154,15 @@ class Storage:
         available_topics = os.listdir(topics_path)
         return available_topics
 
-        
+    def list_chunks(self, topic, partition) -> List[str]:
+        """Return the list of backup files that contain data for this topic partition"""
+        files = os.listdir(f'{self.base_path}/topics/{topic}/{partition}')
+        files.sort()
+        return files
 
+    def get_chunk(self, topic, partition, offset):
+        chunks = self.list_chunks(topic, partition)
+        for c in chunks:
+            minOffset = int(c.split('_')[0])
+            if minOffset >= offset:
+                return c

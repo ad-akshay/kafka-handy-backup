@@ -7,6 +7,7 @@ from Storage import Storage
 from TopicBackupConsumer import TopicBackupConsumer
 import Metadata
 from Encoder import AVAILABLE_COMPRESSORS, Encoder
+from TopicRestorationProducer import TopicRestorationProducer
 from utils import PartitionDetails, TopicDetails
 
 
@@ -40,6 +41,8 @@ p3.add_argument('--topics-regex', type=str, help='Topics to restore')
 p3.add_argument('--original-partitions', action='store_true', help='Publish messages to their original partitions')
 p3.add_argument('--ignore-errors', action='store_true', help='Ignore topics with errors')
 p3.add_argument('--dry-run', action='store_true', help='Do not actually perform the restoration. Only print the actions that would be performed.')
+p3.add_argument('--point-in-time', type=str, help="Manually select a restoration point (use the `backup-info` command to list available options")
+p3.add_argument('--encryption-key', dest='encryption_keys', action='append', type=str, help="Key used for decrypting the data. This option can be used multiple times to specify more than one key if multiple keys were used for encryption.")
 
 
 # "backup-info" command parser
@@ -61,7 +64,7 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)    # Ctrl+C
     signal.signal(signal.SIGTERM, signal_handler)   # Termination
 
-    # print(args)
+    print(args)
 
     if args.command in ['list-topics', 'backup', 'restore']: # Commands that require --bootstrap-servers option
         BOOTSTRAP_SERVERS = args.bootstrap_servers or os.getenv('KAFKA_BOOTSTRAP_SERVERS') or 'localhost:29092'
@@ -181,7 +184,7 @@ if __name__ == "__main__":
                         'error': 'Topic not found in backup'
                     })
 
-        restoration_point_metadata = storage.get_metadata()
+        restoration_point_metadata = storage.get_metadata(args.point_in_time)
         cluster_topic_details = Metadata.topics_details(BOOTSTRAP_SERVERS)
 
         print(f'Restoration point: {restoration_point_metadata.timestamp}')
@@ -232,7 +235,7 @@ if __name__ == "__main__":
         if len(errors) > 0 and not args.ignore_errors:
             print('Aborted: there are some errors. Use --ignore-errors if you wish to continue ignoring the topics with errors.')
             exit()
-            
+
         if len(errors) > 0 and args.ignore_errors:
             print('WARNING: Topics with errors will be ignored')
 
@@ -243,8 +246,48 @@ if __name__ == "__main__":
         if args.dry_run:
             print('Dry run completed. Remove --dry-run to actually restore the topics.')
             exit()
-
         
+        # Validate encryption keys
+        encryption_keys = []
+        if args.encryption_keys is not None:
+            for key in args.encryption_keys:
+                if len(key) != 32:
+                    print('ERROR: Encryption key "{key}" must be 256 bits (32 bytes). Ignoring this key.')
+                    exit()
+                encryption_keys.append(key.encode())
+
+        # Create producers that will restore the topic-partitions
+        producers = []
+        for t in topics_to_restore:
+            for p in t['partitions']:
+                producers.append(TopicRestorationProducer(
+                    src_topic=t['source'],
+                    partition=p.id,
+                    dst_topic=t['destination'],
+                    encryption_keys=encryption_keys,
+                    original_partitions=args.original_partitions,
+                    minOffset=p.minOffset,
+                    maxOffset=p.maxOffset,
+                    storage=storage,
+                ))
+
+        # Start all the producers in different threads, then wait for them to finish
+        threads = []
+        for k in producers:
+            x = threading.Thread(target=k.start)
+            x.start()
+            threads.append(x)
+        
+        # Wait for all threads to be finished or interrupt signal to be received
+        while not exit_signal:
+            time.sleep(1) # We need to stay in the main thread for the SIGINT signal to be caught
+
+            if all([ not x.is_alive() for x in threads ]):
+                break # All threads are finished
+        
+        if exit_signal:
+            for p in producers:
+                p.cancel()
 
 
     elif args.command == 'list-topics':
