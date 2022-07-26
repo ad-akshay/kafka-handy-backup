@@ -39,6 +39,7 @@ p3.add_argument('--topic', '-t', dest='topics', action='append', help='Topics to
 p3.add_argument('--topics-regex', type=str, help='Topics to restore')
 p3.add_argument('--original-partitions', action='store_true', help='Publish messages to their original partitions')
 p3.add_argument('--ignore-errors', action='store_true', help='Ignore topics with errors')
+p3.add_argument('--dry-run', action='store_true', help='Do not actually perform the restoration. Only print the actions that would be performed.')
 
 
 # "backup-info" command parser
@@ -210,33 +211,38 @@ if __name__ == "__main__":
             t['partitions'] = [PartitionDetails(**p) for p in restoration_point_metadata.topics[t['source']]['partitions']]
 
             if args.original_partitions and len(d.partitions) < len(t['partitions']):
-                t['error'] = f'Topic in cluster has a lower number of partitions ({len(d.partitions)}) than the backup ({len(t["partitions"])}): cannot restore original partitions for this topic.'
+                t['error'] = f'Topic in cluster has a lower number of partitions ({len(d.partitions)}) than the backup topic ({len(t["partitions"])}): cannot restore original partitions for this topic.'
         
         # Print restoration summary
         topics_to_restore.sort(key=lambda x: x['source'])
         errors = [x for x in filter(lambda x: 'error' in x, topics_to_restore)]
-        topics_to_restore = filter(lambda x: 'error' not in x, topics_to_restore) # Keep topics without errors
+        topics_to_restore = [x for x in filter(lambda x: 'error' not in x, topics_to_restore)] # Keep topics without errors
 
         if len(errors) > 0:
-            print('Errors:')
+            print('ERRORS:')
         for t in errors:
             print(f"- {t['source']} : {t['error']}")
 
-        print(f'Topics to restore:')
+        if len(topics_to_restore) > 0:
+            print(f'Topics/partitions to restore:')
         for t in topics_to_restore:
             for p in t['partitions']:
-                print(f"- {t['source']}:{p.id} ({p.minOffset}, {p.maxOffset}) -> {t['destination']}:{p.id if args.original_partitions else 'any'}")
+                print(f"- {t['source']}/{p.id} ({p.minOffset}, {p.maxOffset}) -> {t['destination']}:{p.id if args.original_partitions else 'any'}")
 
         if len(errors) > 0 and not args.ignore_errors:
             print('Aborted: there are some errors. Use --ignore-errors if you wish to continue ignoring the topics with errors.')
             exit()
             
-        if len(topics_to_restore):
-            print('There are not topics to restore')
-            exit()
-            
         if len(errors) > 0 and args.ignore_errors:
             print('WARNING: Topics with errors will be ignored')
+
+        if len(topics_to_restore) == 0:
+            print('WARNING: There are not topics to restore')
+            exit()
+
+        if args.dry_run:
+            print('Dry run completed. Remove --dry-run to actually restore the topics.')
+            exit()
 
         
 
