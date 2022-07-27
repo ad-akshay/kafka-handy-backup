@@ -19,7 +19,7 @@ class Storage:
     streams = {}
 
     def __init__(self, base_path: str, max_chunk_size: int, encoder: Encoder, encryption_key: str, decryption_keys: List[bytes] = []):
-        print(f'Configuring storage (base_path="{base_path}", max_chunk_size={max_chunk_size})')
+        # print(f'Configuring storage (base_path="{base_path}", max_chunk_size={max_chunk_size})')
         self.base_path = base_path
         self.max_chunk_size = max_chunk_size
         self.encoder = encoder

@@ -42,7 +42,7 @@ class ReadableMessageStream:
 
         chunk_name = self._get_chunk_name(offset)
         if chunk_name is None:
-            print(f'ERROR: Could not find chunk for offset {offset}')
+            print(f'ERROR: Could not find chunk for offset {offset}. Chunk does not seem to exist. Is this topic backed up ?')
             return False # Could not load chunk
 
         self.file = FileStream(chunk_name, mode='read')
@@ -56,7 +56,7 @@ class ReadableMessageStream:
         try:
             header : Dict = cbor2.loads(header_cbor)
         except:
-            print(f'ERROR: Invalid CBOR header for chunk {chunk_name}')
+            print(f'ERROR: Invalid CBOR header for chunk {chunk_name}. Chunk seems corrupted.')
             self.file.close()
             self.file = None
             return False
@@ -67,7 +67,7 @@ class ReadableMessageStream:
             iv = header.get('iv')
             key = self.decryption_keys.get(keyId)
             if not key:
-                print(f'ERROR: Encryption key not found for chunk {chunk_name} (key-id={keyId})')
+                print(f'ERROR: Encryption key not found for chunk {chunk_name} (key-id={keyId}). Add encryption keys with the --encryption-key option.')
                 self.file.close()
                 self.file = None
                 return False

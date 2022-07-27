@@ -214,7 +214,7 @@ if __name__ == "__main__":
 
             # Check if topics is empty
             if not all([p.maxOffset == p.minOffset for p in d.partitions]):
-                t['error'] = 'Topic in cluster contains messages'
+                t['error'] = f'Destination topic {t["destination"]} contains messages. Must be empty to restore.'
                 continue
 
             if t['source'] not in restoration_point_metadata.topics:
