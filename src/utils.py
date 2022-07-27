@@ -1,4 +1,6 @@
 import hashlib
+import os
+import subprocess
 from typing import Dict, List
 from dataclasses import dataclass
 from confluent_kafka import OFFSET_BEGINNING, OFFSET_END, OFFSET_INVALID, OFFSET_STORED
@@ -60,3 +62,35 @@ class Metadata:
 def key_id(key: bytes) -> str:
     """Generate a unique ID for a given key"""
     return hashlib.md5(key).hexdigest()[0:10]
+
+
+@dataclass
+class KafkaMessage:
+    topic: str
+    value: bytes
+    key: bytes
+    partition: int
+    timestamp: int
+    headers: List|Dict
+    offset: int
+
+
+def reset_group_offset(topic, partition, offset, bootstrap_servers, consumer_group):
+    """Reset committed offset"""
+
+    # executable = f"/usr/bin/kafka-consumer-groups"
+    executable = f"bash -c C:/Users/Karadoc/bin/kafka/bin/kafka-consumer-groups.sh"
+    cmd = f"{executable} --help"
+    # cmd = f"{executable}\
+    #                     --bootstrap-server {bootstrap_servers}\
+    #                     --group {consumer_group}\
+    #                     --topic {topic}\
+    #                     --partition {partition} \
+    #                     --reset-offsets --to-earliest\
+    #                     --dry-run"
+
+    print(f"Executing {cmd}")
+
+    res = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE)
+
+    print(res.stdout)

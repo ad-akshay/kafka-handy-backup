@@ -41,19 +41,18 @@ class TopicBackupConsumer:
     # Tasks control
 
     def stop(self):
-        print('Stop signal received')
         self.exit_task = True
 
-    def start(self, topics_to_backup: List[str], offsets, continuous=False):
+    def start(self, topics_to_backup: List[str], offsets, continuous=False, from_start=False):
 
         consumer = Consumer({
             'group.id': 'kafka-backup-topic',
             'bootstrap.servers': self.bootstrap_servers,
-            'auto.offset.reset': 'smallest',
+            'auto.offset.reset': 'smallest', # Which offset to start if there are not committed offset
             'enable.auto.commit': False
         })
 
-        # Filter out the topics that have no new messages since last backup
+        # Filter out the topics that have no new messages since last backup or are empty
         if continuous:
             topic_list = topics_to_backup
         else:
@@ -62,8 +61,8 @@ class TopicBackupConsumer:
                 for p in offsets[topic]:
                     maxOffset = offsets[topic][p]
                     partition = consumer.committed([TopicPartition(topic, p)])
-                    print(f'{topic} : committed={partition[0].offset} max={maxOffset}')
-                    if maxOffset > partition[0].offset:
+                    print(f'{topic}/{p} : committed={partition[0].offset} max={maxOffset}')
+                    if maxOffset != 0 and maxOffset > partition[0].offset:
                         topic_list.append(topic)
                         break
 

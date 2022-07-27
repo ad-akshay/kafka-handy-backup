@@ -11,18 +11,20 @@ from typing import Dict, List
 import cbor2
 from Encoder import Encoder
 from FileStream import Encryptor, FileStream
+from ReadableMessageStream import ReadableMessageStream
 from utils import Metadata, key_id
 
 class Storage:
 
     streams = {}
 
-    def __init__(self, base_path: str, max_chunk_size: int, encoder: Encoder, encryption_key: str):
-        print(f'Configuring storage (base_path={base_path} max_chunk_size={max_chunk_size})')
+    def __init__(self, base_path: str, max_chunk_size: int, encoder: Encoder, encryption_key: str, decryption_keys: List[bytes] = []):
+        print(f'Configuring storage (base_path="{base_path}", max_chunk_size={max_chunk_size})')
         self.base_path = base_path
         self.max_chunk_size = max_chunk_size
         self.encoder = encoder
         self.encryption_key = encryption_key
+        self.decryption_keys = { key_id(x):x for x in decryption_keys }
 
     def backup_message(self, msg):
         """Back up the given message to the proper stream (based on its topic and partition)"""
@@ -49,11 +51,13 @@ class Storage:
         stream.write(pack('<H', length))
         stream.write(encoded_msg)
 
+        print(f"{stream_id} offset={msg.offset()}")
+
     def create_stream(self, stream_id, msg):
         """Create a new stream"""
         if not self.streams.get(stream_id):
-            path = f"topics/{msg.topic()}/{msg.partition()}/{msg.offset()}_{msg.timestamp()[1]}"
-            stream = FileStream(backup_directory=self.base_path, path=path)
+            path = f"{self.base_path}/topics/{msg.topic()}/{msg.partition()}/{msg.offset()}_{msg.timestamp()[1]}"
+            stream = FileStream(path)
             self.streams[stream_id] = stream
 
             # If encryption is configured, create an set the encryptor for that stream
@@ -72,7 +76,7 @@ class Storage:
             if stream.encryptor:
                 header['encryption'] = stream.encryptor.encryption          # Type of encryption
                 header['iv'] = stream.encryptor.iv                          # Initialization vector
-                header['encryption-key-id'] = key_id(self.encryption_key)   # Store the encryption key id to identify the proper key during decryption
+                header['key-id'] = key_id(self.encryption_key)              # Store the encryption key id to identify the proper key during decryption
 
             # Write file header (unencrypted because we need the IV to decrypt)
             cbor_header = cbor2.dumps(header) # Encode to CBOR
@@ -83,8 +87,8 @@ class Storage:
 
     def backup_metadata(self, metadata: Metadata):
         """Backup the metadata to a file"""
-        path = f'metadata/{metadata.timestamp}'
-        file = FileStream(self.base_path, path)
+        path = f'{self.base_path}/metadata/{metadata.timestamp}'
+        file = FileStream(path)
         data = json.dumps(asdict(metadata)).encode()
         file.write(data)
         file.close()
@@ -158,11 +162,20 @@ class Storage:
         """Return the list of backup files that contain data for this topic partition"""
         files = os.listdir(f'{self.base_path}/topics/{topic}/{partition}')
         files.sort()
-        return files
+        return [f'{self.base_path}/topics/{topic}/{partition}/{f}' for f in files]
 
     def get_chunk(self, topic, partition, offset):
+        """Return the name of the chunk that contains the given offset for a topic partition"""
         chunks = self.list_chunks(topic, partition)
         for c in chunks:
             minOffset = int(c.split('_')[0])
             if minOffset >= offset:
                 return c
+
+    def get_readable_msg_stream(self, topic, partition):
+        return ReadableMessageStream(
+            topic,
+            partition,
+            self.decryption_keys,
+            self.list_chunks(topic, partition)
+        )

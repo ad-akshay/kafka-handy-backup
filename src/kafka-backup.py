@@ -26,6 +26,7 @@ p1.add_argument('--continuous', action='store_true', help='Continuous backup mod
 p1.add_argument('--point-in-time-interval', type=int, default=86400, help='Point in time interval (default: 24h)')
 p1.add_argument('--compression', type=str, choices=AVAILABLE_COMPRESSORS, help='Specify compression algorithm for compressing messages')
 p1.add_argument('--encryption-key', type=str, help='256 bits encryption key')
+p1.add_argument('--from-start', type=str, help='Backup from the topic start (not incremental)')
 
 # "list-topics" command parser
 p2 = subparsers.add_parser('list-topics')
@@ -64,7 +65,7 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)    # Ctrl+C
     signal.signal(signal.SIGTERM, signal_handler)   # Termination
 
-    print(args)
+    # print(args)
 
     if args.command in ['list-topics', 'backup', 'restore']: # Commands that require --bootstrap-servers option
         BOOTSTRAP_SERVERS = args.bootstrap_servers or os.getenv('KAFKA_BOOTSTRAP_SERVERS') or 'localhost:29092'
@@ -78,10 +79,10 @@ if __name__ == "__main__":
         encryption_key = None
         if args.encryption_key:
             encryption_key = args.encryption_key.encode()
-
-        if len(encryption_key) != 32:
-            print('ERROR: Encryption key must be 256 bits (32 bytes)')
-            exit()
+            
+            if len(encryption_key) != 32:
+                print('ERROR: Encryption key must be 256 bits (32 bytes)')
+                exit()
 
         restoration_point_metadata = Metadata.read_metadata(BOOTSTRAP_SERVERS)
         existing_topics = restoration_point_metadata.topics
@@ -151,12 +152,22 @@ if __name__ == "__main__":
             print('ERROR: at least one of --topic or --topics-regex must be specified')
             exit()
 
+        # Validate encryption keys
+        encryption_keys = []
+        if args.encryption_keys is not None:
+            for key in args.encryption_keys:
+                if len(key) != 32:
+                    print(f'ERROR: Encryption key "{key}" must be 256 bits (32 bytes)')
+                    exit()
+                encryption_keys.append(key.encode())
+
         # Configure the storage backend
         storage = Storage(
             base_path=args.directory,
             max_chunk_size=10,
             encoder=Encoder(),
-            encryption_key=None
+            encryption_key=None,
+            decryption_keys=encryption_keys
         )
 
         available_topics = storage.list_available_topics()
@@ -230,7 +241,7 @@ if __name__ == "__main__":
             print(f'Topics/partitions to restore:')
         for t in topics_to_restore:
             for p in t['partitions']:
-                print(f"- {t['source']}/{p.id} ({p.minOffset}, {p.maxOffset}) -> {t['destination']}:{p.id if args.original_partitions else 'any'}")
+                print(f"- {t['source']}/{p.id} ({p.minOffset}, {p.maxOffset}) -> {t['destination']}/{p.id if args.original_partitions else 'any'}")
 
         if len(errors) > 0 and not args.ignore_errors:
             print('Aborted: there are some errors. Use --ignore-errors if you wish to continue ignoring the topics with errors.')
@@ -246,15 +257,6 @@ if __name__ == "__main__":
         if args.dry_run:
             print('Dry run completed. Remove --dry-run to actually restore the topics.')
             exit()
-        
-        # Validate encryption keys
-        encryption_keys = []
-        if args.encryption_keys is not None:
-            for key in args.encryption_keys:
-                if len(key) != 32:
-                    print('ERROR: Encryption key "{key}" must be 256 bits (32 bytes). Ignoring this key.')
-                    exit()
-                encryption_keys.append(key.encode())
 
         # Create producers that will restore the topic-partitions
         producers = []
@@ -264,11 +266,11 @@ if __name__ == "__main__":
                     src_topic=t['source'],
                     partition=p.id,
                     dst_topic=t['destination'],
-                    encryption_keys=encryption_keys,
                     original_partitions=args.original_partitions,
                     minOffset=p.minOffset,
                     maxOffset=p.maxOffset,
                     storage=storage,
+                    bootstrap_server=BOOTSTRAP_SERVERS
                 ))
 
         # Start all the producers in different threads, then wait for them to finish

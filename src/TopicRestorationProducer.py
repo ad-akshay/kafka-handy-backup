@@ -6,6 +6,8 @@
 import threading
 from typing import List
 from Storage import Storage
+from confluent_kafka import Producer
+
 
 from utils import key_id
 
@@ -13,7 +15,7 @@ class TopicRestorationProducer():
 
     _exit_signal = False
 
-    def __init__(self, src_topic: str, dst_topic: str, partition: int, original_partitions: bool, encryption_keys: List[bytes], minOffset:int, maxOffset:int, storage: Storage):
+    def __init__(self, src_topic: str, dst_topic: str, partition: int, original_partitions: bool, minOffset:int, maxOffset:int, storage: Storage, bootstrap_server: str):
         """
             src_topic
                 Source topic name
@@ -43,41 +45,46 @@ class TopicRestorationProducer():
         self.original_partitions = original_partitions
         self.offset_start = minOffset   # First offset to restore
         self.offset_stop = maxOffset    # Last offset to restore (actually maxOffset - 1 is the max to restore)
+        self.bootstrap_server = bootstrap_server
 
-        self.encryption_keys = { key_id(x):x for x in encryption_keys } # Create a dict { <key_id>:<key_value> }
-        
         self.cursor = self.offset_start
 
     def start(self):
         print(f'Starting restoration for {self.src_topic}/{self.partition}')
 
-        # Create the list of all chunks we need for restoration
-        self.chunks = self.storage.list_chunks(self.src_topic, self.partition)
-
-        first_index = None
-        last_index = None
-        for i in range(0, len(self.chunks)):
-            file_first_offset = int(self.chunks[i].split('_')[0])
-            if first_index is None and file_first_offset <= self.offset_start: first_index = i
-            if last_index is None and file_first_offset > self.offset_stop: last_index = i
-
-        self.chunks = self.chunks[first_index:last_index]
-
-        # print('Chunks', self.chunks)
+        self.msg_stream = self.storage.get_readable_msg_stream(self.src_topic, self.partition)
+        if not self.msg_stream.load_chunk(self.offset_start):
+            print(f'ERROR: Could not load chunk for topic {self.src_topic}/{self.partition} offset {self.offset_start}. Is this offset backed up ?')
+            return
 
         # Create a producer
+        producer = Producer({
+            'bootstrap.servers': self.bootstrap_server,
+            'client.id': 'kafka-backup'
+        })
 
-        # For each chunk, decode and publish the messages
-        # for c in self.chunks:
-            # Read the file content
+        for msg in self.msg_stream:
+            # print("Restoring", msg)
 
-            # If offset_stop is reached, stop publishing and exit the task
+            if self._exit_signal:
+                break
 
+            if msg.offset+1 >= self.offset_stop:
+                break
 
-        # Check the exit signal
-        
-        
-        print(f'Restoration of {self.src_topic}/{self.partition} completed')
+            # Publish the messages
+            producer.produce(
+                topic=self.dst_topic,
+                key=msg.key,
+                value=msg.value,
+                partition=msg.partition,
+                timestamp=msg.timestamp,
+                headers=msg.headers,
+                # on_delivery= lambda x, y: print('on_delivery', x, str(y))
+                )
+            producer.flush()
+
+        print(f'Restoration of {self.src_topic}/{self.partition} completed up to offset {msg.offset}')
 
 
     def cancel(self):
