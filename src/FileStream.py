@@ -11,12 +11,20 @@ class FileStream:
 
     encryptor : Encryptor = None
 
-    def __init__(self, backup_directory , path):
-        self.filePath = backup_directory + '/' + path
-        print(f'Creating {self.filePath}')
+    def __init__(self , path, mode = 'write'):
+        self.filePath = path
         os.makedirs(os.path.dirname(self.filePath), exist_ok=True) # Create missing directories
         self._size = 0
-        self.file = open(self.filePath , 'wb')
+
+        if mode == 'read':
+            print(f'Opening {self.filePath}')
+            self.file = open(self.filePath, 'rb')
+            self.file.seek(0, 2) # Go to end of file
+            self._size = self.file.tell()
+            self.file.seek(0)    # Back to start
+        else:
+            print(f'Creating {self.filePath}')
+            self.file = open(self.filePath , 'wb')
 
     def write(self, bytes, disable_encryption=False):
         if self.encryptor and not disable_encryption:
@@ -25,8 +33,17 @@ class FileStream:
         self._size += written
         return written
 
+    def read(self, size=None, disable_decryption=False) -> bytes:
+        bytes = self.file.read(size)
+        if self.encryptor and not disable_decryption:
+            bytes = self.encryptor.decrypt(bytes)
+        return bytes
+
     def size(self):
         return self._size
+
+    def at_end(self):
+        return self.file.tell() == self.size()
 
     def close(self):
         print('Closing', self.filePath)
