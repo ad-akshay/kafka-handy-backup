@@ -34,11 +34,11 @@ class Encoder:
                 partition=None,         # Unknown in this scope
                 value=obj_msg['v'],
                 key=obj_msg['k'],
-                headers=[ tuple(x) for x in obj_msg['h'] ],
+                headers=[ tuple(x) for x in obj_msg['h'] ] if obj_msg['h'] is not None else None,
                 offset=obj_msg['o'],
                 timestamp=obj_msg['t']
             )
-                
+
 
     def compress(self, bytes) -> bytes:
         """Compress the given byte array"""
