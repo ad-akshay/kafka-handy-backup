@@ -54,7 +54,7 @@ class TopicRestorationProducer():
 
         self.msg_stream = self.storage.get_readable_msg_stream(self.src_topic, self.partition)
         if not self.msg_stream.load_chunk(self.offset_start):
-            print(f'ERROR: Could not load chunk for topic {self.src_topic}/{self.partition} offset {self.offset_start}. Is this offset backed up ?')
+            # print(f'ERROR: Could not load chunk for topic {self.src_topic}/{self.partition} offset {self.offset_start}.')
             return
 
         # Create a producer
@@ -63,14 +63,18 @@ class TopicRestorationProducer():
             'client.id': 'kafka-backup'
         })
 
+        next_offset = self.offset_start # Which offset to restore next
         for msg in self.msg_stream:
             # print("Restoring", msg)
-
+            
             if self._exit_signal:
                 break
 
             if msg.offset+1 >= self.offset_stop:
                 break
+
+            if next_offset > msg.offset:
+                continue # Not there yet
 
             # Publish the messages
             producer.produce(
@@ -82,7 +86,10 @@ class TopicRestorationProducer():
                 headers=msg.headers,
                 # on_delivery= lambda x, y: print('on_delivery', x, str(y))
                 )
-            producer.flush()
+
+            next_offset += 1
+
+        producer.flush()
 
         print(f'Restoration of {self.src_topic}/{self.partition} completed up to offset {msg.offset}')
 
