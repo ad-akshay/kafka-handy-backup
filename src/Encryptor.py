@@ -8,7 +8,7 @@ AVAILABLE_ENCRYPTIONS = ['AES256']
 
 class Encryptor:
 
-    def __init__(self, key: bytes, iv: bytes = None, decrypt=False):
+    def __init__(self, key: bytes, iv: bytes = None):
         self.encryption = 'AES256'
         self.iv = iv or os.urandom(16) # Generate if required
         self.cipher = Cipher(algorithms.AES(key), modes.CTR(self.iv))
