@@ -47,8 +47,6 @@ class TopicRestorationProducer():
         self.offset_stop = maxOffset    # Last offset to restore (actually maxOffset - 1 is the max to restore)
         self.bootstrap_server = bootstrap_server
 
-        self.cursor = self.offset_start
-
     def start(self):
         print(f'Starting restoration for {self.src_topic}/{self.partition}')
 
