@@ -77,7 +77,7 @@ class TopicRestorationProducer():
                 topic=self.dst_topic,
                 key=msg.key,
                 value=msg.value,
-                partition=msg.partition,
+                partition=msg.partition if self.original_partitions else -1,
                 timestamp=msg.timestamp,
                 headers=msg.headers,
                 # on_delivery= lambda x, y: print('on_delivery', x, str(y))

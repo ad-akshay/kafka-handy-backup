@@ -39,7 +39,7 @@ p3.add_argument('--bootstrap-servers', type=str)
 p3.add_argument('--directory', type=str, default='backup', help='Backup directory/container (default="backup")')
 p3.add_argument('--topic', '-t', dest='topics', action='append', help='Topics to backup')
 p3.add_argument('--topics-regex', type=str, help='Topics to restore')
-p3.add_argument('--original-partitions', action='store_true', help='Publish messages to their original partitions')
+p3.add_argument('--ignore-partitions', dest='original_partitions', action='store_false', help='Ignore the original message partitions when publishing')
 p3.add_argument('--ignore-errors', action='store_true', help='Ignore topics with errors')
 p3.add_argument('--dry-run', action='store_true', help='Do not actually perform the restoration. Only print the actions that would be performed.')
 p3.add_argument('--point-in-time', type=str, help="Manually select a restoration point (use the `backup-info` command to list available options")
@@ -213,7 +213,7 @@ if __name__ == "__main__":
                 continue
 
             # Check if topics is empty
-            if not all([p.maxOffset == 0 for p in d.partitions]):
+            if not all([p.maxOffset == p.minOffset for p in d.partitions]):
                 t['error'] = 'Topic in cluster contains messages'
                 continue
 
