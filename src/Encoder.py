@@ -1,5 +1,5 @@
 import cbor2, bz2
-from cryptography.fernet import Fernet
+from utils import KafkaMessage
 
 AVAILABLE_ENCODERS = ['cbor']
 AVAILABLE_COMPRESSORS = ['bz2']
@@ -25,14 +25,37 @@ class Encoder:
 
             return cbor2.dumps(obj_msg)
 
+    def decode(self, bytes) -> KafkaMessage:
+        if self.encoder == 'cbor':
+            obj_msg = cbor2.loads(bytes)
 
-    def compress(self, bytes):
+            return KafkaMessage(
+                topic=None,             # Unknown in this scope
+                partition=None,         # Unknown in this scope
+                value=obj_msg['v'],
+                key=obj_msg['k'],
+                headers=[ tuple(x) for x in obj_msg['h'] ],
+                offset=obj_msg['o'],
+                timestamp=obj_msg['t']
+            )
+                
+
+    def compress(self, bytes) -> bytes:
         """Compress the given byte array"""
         if self.compression == 'bz2':
             return bz2.compress(bytes)
         else:
             return bytes
 
+    def decompress(self, bytes) -> bytes:
+        if self.compression == 'bz2':
+            return bz2.decompress(bytes)
+        else:
+            return bytes
+
     def encode_message(self, msg):
         """Encodes a message into an optionally compressed and encrypted byte array"""
         return self.compress(self.encode(msg))
+
+    def decode_message(self, bytes):
+        return self.decode(self.decompress(bytes))
