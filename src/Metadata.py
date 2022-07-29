@@ -1,24 +1,23 @@
 """
-Class in charge of reading the metadata (consumer offset, topics details) at points in time
+Class in charge of reading the metadata (consumer offset, topics details) from a cluster
 """
 
 from dataclasses import asdict
 from math import floor
 import time
-from typing import Dict, List
 from confluent_kafka import Consumer, TopicPartition
 from confluent_kafka.admin import AdminClient
-from utils import ConsumerDetails, ConsumerOffset, Metadata, PartitionDetails, TopicDetails
+from utils import ConsumerDetails, ConsumerOffset, MetaData, PartitionDetails, TopicDetails, OFFSET_INVALID
 
 
-def list_consumer_groups(bootstrap_servers):
+def list_consumer_groups(bootstrap_servers: str):
     """Return the id of all active consumer groups"""
     admin = AdminClient({'bootstrap.servers': bootstrap_servers})
     group_meta = admin.list_groups(timeout=10) # List all active consumer groups
     return [d.id for d in group_meta]
 
 
-def topics_details(bootstrap_servers) -> Dict:
+def topics_details(bootstrap_servers: str) -> dict[str, TopicDetails]:
     """Retreive topics details (paritions, offsets, etc.)"""
     admin = AdminClient({'bootstrap.servers': bootstrap_servers})
     consumer = Consumer({
@@ -33,11 +32,10 @@ def topics_details(bootstrap_servers) -> Dict:
         if t.topic == "__consumer_offsets":
             continue
 
-        partitions = []
+        partitions = {}
         for p in t.partitions.values():
             wm = consumer.get_watermark_offsets(TopicPartition(t.topic, p.id))
-            # print(f'{id} : {wm}')
-            partitions.append(PartitionDetails(p.id, wm[0], wm[1], len(p.replicas)))
+            partitions[p.id] = PartitionDetails(p.id, wm[0], wm[1], len(p.replicas))
         
         topics_details[t.topic] = TopicDetails(t.topic, partitions)
 
@@ -45,7 +43,7 @@ def topics_details(bootstrap_servers) -> Dict:
 
     return topics_details
 
-def consumer_details(bootstrap_servers) -> List[ConsumerDetails]:
+def consumer_details(bootstrap_servers: str) -> dict[str, ConsumerDetails]:
     """Retreive consumer details"""
 
     consumer_goups = list_consumer_groups(bootstrap_servers)
@@ -59,17 +57,20 @@ def consumer_details(bootstrap_servers) -> List[ConsumerDetails]:
         })
 
         # For each topic, get the committed offset
+        partition_offsets = []
         for tn in topics.values():
-            partition_offsets = c.committed([TopicPartition(tn.name, x.id) for x in tn.partitions])
+            pa : list[TopicPartition] = c.committed([TopicPartition(tn.name, x.id) for x in tn.partitions.values()])
+            partition_offsets.extend(pa)
+            # print([(p.topic, p.partition, p.offset) for p in pa])
 
         c.close()
         
-        details[id] = ConsumerDetails(id, [ConsumerOffset(tn.name, p.partition, p.offset) for p in partition_offsets])
+        details[id] = ConsumerDetails(id, [ConsumerOffset(p.topic, p.partition, p.offset) for p in partition_offsets if p.offset != OFFSET_INVALID])
 
     return details
 
-def read_metadata(bootstrap_servers):
-    return Metadata(
+def read_metadata(bootstrap_servers: str):
+    return MetaData(
         timestamp=floor(time.time()),
         consumers=consumer_details(bootstrap_servers),
         topics=topics_details(bootstrap_servers)

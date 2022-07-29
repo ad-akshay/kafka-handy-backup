@@ -1,32 +1,6 @@
 #
 #   Functions for encoding/decoding messages in the __consumer_offsets topic
 #
-#   Few notes on the __consumer_offsets topic
-#   - The first two bytes of the key (version) defines what type of message it is.
-#     There are two types of messages : offset commit and group metadata.
-#   - The two bytes of the value of a message represent a version that defines how the rest of the value is encoded.
-#   - Numbers are encoded in big endian
-#   - Strings are encoded with their length first: | <string length> (uint16) | <ascii characters> (<string length> bytes) |
-#
-#
-#   Example of key+value of a offset commit message:
-#
-#    key = b'\x00\x01\x00\x12kafka-backup-topic\x00\x0ctest-topic-1\x00\x00\x00\x00'
-#
-#      Key fiels are:
-#       version (uint16) = \x00\x01
-#       group (string) = \x00\x12 (size) + 'kafka-backup-topic'
-#       topic (string) = \x00\x0c (size) + 'test-topic-1'
-#       partition = \x00\x00\x00\x00
-#
-#    value = b'\x00\x03\x00\x00\x00\x00\x00\x00\x15\x89\xff\xff\xff\xff\x00\x00\x00\x00\x01\x82\x1c\x1aT9'
-#
-#      Value fields are:
-#       version: \x00\x03
-#       offset (int64): \x00\x00\x00\x00\x00\x00\x15\x89
-#       leaderEpoch (int32): \xff\xff\xff\xff (-1)
-#       metadata (string): \x00\x00 (empty string)
-#       commitTimestamp: \x00\x00\x01\x82\x1c\x1a\x54\x39
 
 
 from struct import *

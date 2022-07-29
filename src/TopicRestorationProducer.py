@@ -3,19 +3,18 @@
 #
 
 
-import threading
-from typing import List
+from typing import Dict, List
 from Storage import Storage
 from confluent_kafka import Producer
+import Metadata
 
-
-from utils import key_id
+from utils import ConsumerDetails, PartitionDetails, TopicDetails, setCommittedOffset
 
 class TopicRestorationProducer():
 
     _exit_signal = False
 
-    def __init__(self, src_topic: str, dst_topic: str, partition: int, original_partitions: bool, minOffset:int, maxOffset:int, storage: Storage, bootstrap_server: str):
+    def __init__(self, src_topic: str, dst_topic: str, partition: int, original_partitions: bool, minOffset:int, maxOffset:int, storage: Storage, bootstrap_server: str, restore_consumer_offset: bool, consumer_offsets: Dict[str, ConsumerDetails]):
         """
             src_topic
                 Source topic name
@@ -46,6 +45,8 @@ class TopicRestorationProducer():
         self.offset_start = minOffset   # First offset to restore
         self.offset_stop = maxOffset    # Last offset to restore (actually maxOffset - 1 is the max to restore)
         self.bootstrap_server = bootstrap_server
+        self.restore_consumer_offsets = restore_consumer_offset
+        self.consumer_offsets = consumer_offsets
 
     def start(self):
         print(f'Starting restoration for {self.src_topic}/{self.partition}')
@@ -88,6 +89,35 @@ class TopicRestorationProducer():
             next_offset += 1
 
         producer.flush()
+
+        # Restore consumer offsets
+        if self.restore_consumer_offsets and self.original_partitions:
+            print(f'Restoring consumer offsets for topic {self.src_topic}')
+            
+            # Get the current max offset of the topic
+            topics_details = Metadata.topics_details(self.bootstrap_server)
+            t = topics_details[self.dst_topic]
+            p = t.partitions[self.partition]
+
+            # Calculate the offset variation
+            offset_variation = p.maxOffset - next_offset
+
+            # For each consumer that have a committed offset for this topic-partition
+            for group in self.consumer_offsets:
+                for co in self.consumer_offsets[group]:
+                    print(co)
+                    if self.src_topic == co.topic and self.partition == co.partition:
+                        # This offset applies to this topic partition
+
+                        # Because the offsets in the destination topic might
+                        # not be the same as the ones in the source topic (backup)
+                        # we need to adjust the value with the variation
+                        new_offset = co.committedOffset + offset_variation
+                        
+                        # Restore the committed offset
+                        print(f'Committing offset: {self.dst_topic}/{self.partition} for {group.group_id} to {new_offset}')
+                        setCommittedOffset(group.group_id, self.dst_topic, self.partition, new_offset, self.bootstrap_server)
+        
 
         print(f'Restoration of {self.src_topic}/{self.partition} completed up to offset {msg.offset}')
 

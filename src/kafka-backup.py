@@ -1,4 +1,5 @@
 #! ../venv/Scripts/python
+#! ../venv/Scripts/python
 import argparse, re, signal, threading, time, os
 from datetime import datetime, timedelta
 from base64 import encodebytes
@@ -8,7 +9,8 @@ from TopicBackupConsumer import TopicBackupConsumer
 import Metadata
 from Encoder import AVAILABLE_COMPRESSORS, Encoder
 from TopicRestorationProducer import TopicRestorationProducer
-from utils import PartitionDetails, TopicDetails
+from utils import TopicDetails, setCommittedOffsets
+from confluent_kafka import TopicPartition
 
 
 # Define command line arguments
@@ -16,7 +18,7 @@ parser = argparse.ArgumentParser()
 subparsers = parser.add_subparsers(dest='command')
 
 # "backup" command parser
-p1 = subparsers.add_parser('backup')
+p1 = subparsers.add_parser('backup', help='Backup selected topics from the specified cluster')
 p1.add_argument('--topic', '-t', dest='topics', action='append', help='Topics to backup')
 p1.add_argument('--topics-regex', type=str, help='Topics to backup')
 p1.add_argument('--bootstrap-servers', type=str)
@@ -29,27 +31,35 @@ p1.add_argument('--encryption-key', type=str, help='256 bits encryption key')
 p1.add_argument('--from-start', type=str, help='Backup from the topic start (not incremental)')
 
 # "list-topics" command parser
-p2 = subparsers.add_parser('list-topics')
+p2 = subparsers.add_parser('list-topics', help='List topics in the cluster')
 p2.add_argument('--bootstrap-servers', type=str)
 p2.add_argument('--details', action='store_true', help='Show partition details')
 
 # "restore" command parser
-p3 = subparsers.add_parser('restore')
+p3 = subparsers.add_parser('restore', help='Restore backed up topics to the cluster')
 p3.add_argument('--bootstrap-servers', type=str)
 p3.add_argument('--directory', type=str, default='backup', help='Backup directory/container (default="backup")')
 p3.add_argument('--topic', '-t', dest='topics', action='append', help='Topics to backup')
 p3.add_argument('--topics-regex', type=str, help='Topics to restore')
 p3.add_argument('--ignore-partitions', dest='original_partitions', action='store_false', help='Ignore the original message partitions when publishing')
 p3.add_argument('--ignore-errors', action='store_true', help='Ignore topics with errors')
+p3.add_argument('--ignore-offsets', action='store_true', help='Do not restore the consumer group offsets (default when --ignore-partition is used)')
 p3.add_argument('--dry-run', action='store_true', help='Do not actually perform the restoration. Only print the actions that would be performed.')
 p3.add_argument('--point-in-time', type=str, help="Manually select a restoration point (use the `backup-info` command to list available options")
 p3.add_argument('--encryption-key', dest='encryption_keys', action='append', type=str, help="Key used for decrypting the data. This option can be used multiple times to specify more than one key if multiple keys were used for encryption.")
+p3.add_argument('--restore-offsets', action='store_true', help="Restore the consumer offsets")
 
 
 # "backup-info" command parser
-p4 = subparsers.add_parser('backup-info')
+p4 = subparsers.add_parser('backup-info', help='Print information on the backed up info')
 p4.add_argument('--limit', type=int, default=10, help='Max number of lines to print')
 p4.add_argument('--directory', type=str, default='backup', help='Backup directory/container (default="backup")')
+
+# "reset-cursor"
+p5 = subparsers.add_parser('reset-cursor', help='Reset the committed consumer offset of the kafka backup consumer so that new backups will start from the beginning of each topic')
+p5.add_argument('--bootstrap-servers', type=str)
+p5.add_argument('--confirm', action='store_true', help='Set to cctually execute the command')
+p5.add_argument('--topics-regex', type=str, help='Topics to restore')
 
 # Parse the input arguments
 args = parser.parse_args()
@@ -67,7 +77,7 @@ if __name__ == "__main__":
 
     # print(args)
 
-    if args.command in ['list-topics', 'backup', 'restore']: # Commands that require --bootstrap-servers option
+    if args.command in ['list-topics', 'backup', 'restore', 'reset-cursor']: # Commands that require --bootstrap-servers option
         BOOTSTRAP_SERVERS = args.bootstrap_servers or os.getenv('KAFKA_BOOTSTRAP_SERVERS') or 'localhost:29092'
 
     if args.command == 'backup':
@@ -114,8 +124,6 @@ if __name__ == "__main__":
             encryption_key=encryption_key
         )
 
-        storage.backup_metadata(restoration_point_metadata)
-
         # Create the task that backups the topics data
         topic_backup_consumer = TopicBackupConsumer(
             storage=storage,
@@ -124,7 +132,7 @@ if __name__ == "__main__":
 
         offsets = {}
         for topic in topics_to_restore:
-            offsets[topic] = { p.id: p.maxOffset for p in existing_topics[topic].partitions }
+            offsets[topic] = { p.id: p.maxOffset for p in existing_topics[topic].partitions.values() }
         x = threading.Thread(target=topic_backup_consumer.start, args=(topics_to_restore, offsets, args.continuous))
         x.start()
 
@@ -146,6 +154,9 @@ if __name__ == "__main__":
         # If we get here, an exit signal was caught or the topic backup task is done
 
         topic_backup_consumer.stop()
+
+        # Only backup the metadata at the end so that the restoration point is available once topics are properly backed up
+        storage.backup_metadata(restoration_point_metadata)
 
     elif args.command == 'restore':
         if not args.topics and not args.topics_regex:
@@ -198,6 +209,10 @@ if __name__ == "__main__":
         restoration_point_metadata = storage.get_metadata(args.point_in_time)
         cluster_topic_details = Metadata.topics_details(BOOTSTRAP_SERVERS)
 
+        if restoration_point_metadata is None:
+            print(f'ERROR: Could not find metadata for restoration point {args.point_in_time}')
+            exit()
+
         print(f'Restoration point: {restoration_point_metadata.timestamp}')
         # print(f'<source-topic>:<partition> -> <destination-topic>:<partition>')
 
@@ -213,7 +228,7 @@ if __name__ == "__main__":
                 continue
 
             # Check if topics is empty
-            if not all([p.maxOffset == p.minOffset for p in d.partitions]):
+            if not all([p.maxOffset == p.minOffset for p in d.partitions.values()]):
                 t['error'] = f'Destination topic {t["destination"]} contains messages. Must be empty to restore.'
                 continue
 
@@ -222,7 +237,7 @@ if __name__ == "__main__":
                 continue
 
             # Cluster partitions
-            t['partitions'] = [PartitionDetails(**p) for p in restoration_point_metadata.topics[t['source']]['partitions']]
+            t['partitions'] = restoration_point_metadata.topics[t['source']].partitions
 
             if args.original_partitions and len(d.partitions) < len(t['partitions']):
                 t['error'] = f'Topic in cluster has a lower number of partitions ({len(d.partitions)}) than the backup topic ({len(t["partitions"])}): cannot restore original partitions for this topic.'
@@ -241,7 +256,7 @@ if __name__ == "__main__":
             print(f'Topics/partitions to restore:')
         for t in topics_to_restore:
             for p in t['partitions']:
-                print(f"- {t['source']}/{p.id} ({p.minOffset}, {p.maxOffset}) -> {t['destination']}/{p.id if args.original_partitions else 'any'}")
+                print(f"- {t['source']}/{p.id} ({p.minOffset}, {p.maxOffset}) -> {t['destination']}/{ f'{p.id} ({d.partitions[p.id].maxOffset}, {d.partitions[p.id].maxOffset + p.maxOffset - p.minOffset})' if args.original_partitions else 'any'}")
 
         if len(errors) > 0 and not args.ignore_errors:
             print('Aborted: there are some errors. Use --ignore-errors if you wish to continue ignoring the topics with errors.')
@@ -270,7 +285,9 @@ if __name__ == "__main__":
                     minOffset=p.minOffset,
                     maxOffset=p.maxOffset,
                     storage=storage,
-                    bootstrap_server=BOOTSTRAP_SERVERS
+                    bootstrap_server=BOOTSTRAP_SERVERS,
+                    restore_consumer_offset=args.restore_offsets,
+                    consumer_offsets=restoration_point_metadata.consumers
                 ))
 
         # Start all the producers in different threads, then wait for them to finish
@@ -293,11 +310,16 @@ if __name__ == "__main__":
 
 
     elif args.command == 'list-topics':
+        print('\nTopic list:')
         for t in Metadata.topics_details(BOOTSTRAP_SERVERS).values():
             if args.details:
                 print(t.friendly())
             else:
-                print(f'- {t.name} ({len(t.partitions)} partitions, {max([x.replicas for x in t.partitions])} replicas)')
+                print(f'- {t.name} ({len(t.partitions)} partitions, {max([x.replicas for x in t.partitions.values()])} replicas)')
+
+        print('\nConsumers info:')
+        for c in Metadata.consumer_details(BOOTSTRAP_SERVERS).values():
+            print(c.friendly())
 
     elif args.command == 'backup-info':
         # Configure the storage backend
@@ -308,7 +330,7 @@ if __name__ == "__main__":
             encryption_key=None
         )
 
-        print('\nRestoration points:')
+        print('\nAvailable restoration points:')
         points = storage.list_restoration_points(args.limit)
         for i in range(0, len(points)):
             epoch = points[i]
@@ -319,13 +341,37 @@ if __name__ == "__main__":
             else:
                 diff_string = str(diff.days) + ' days'
 
-            print(f' {i}) ts={epoch} : {dt.strftime("%Y-%m-%d %H:%M:%S")} ({diff_string} ago)')
+            print(f' {i}) {epoch} : {dt.strftime("%Y-%m-%d %H:%M:%S")} ({diff_string} ago)')
 
         print('\nBacked up topics:')
         partitions_to_restore = storage.list_available_topics()
         partitions_to_restore.sort()
         for t in partitions_to_restore:
             print(f'- {t}')
+
+    elif args.command == 'reset-cursor':
+
+        # topic_names = storage.list_available_topics()
+        group = 'kafka-backup-topic' # The group used by the TopicBackupConsumer
+        meta = Metadata.consumer_details(BOOTSTRAP_SERVERS)
+        cd = meta.get(group)
+
+        if cd is None:
+            print(f'No offsets committed on the cluster (never backed up)')
+            exit()
         
+        print(f"Will reset the cursor for {len(cd.offsets)} topic/partitions")
+        # for c in cd.offsets:
+        #     print(f"- {c.topic}/{c.partition}")
+        
+        # Set committed offset to 0 for all topics that have a committed offset for the backup group id
+        setCommittedOffsets(group, BOOTSTRAP_SERVERS, [TopicPartition(topic=c.topic, partition=c.partition, offset=0) for c in cd.offsets])
+
+        if not args.confirm:
+            print('The --confirm option must be set to actually execute the command')
+            exit()
+
+        print('Done. Your next backup will start from the beginning of the topics.')
+
     else:
         parser.print_help()

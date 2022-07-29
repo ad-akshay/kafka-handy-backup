@@ -3,22 +3,18 @@ Interface to the storage system
 """
 
 from dataclasses import asdict
-import json
-import os
+import os, cbor2
 from struct import *
-from time import strftime
-from typing import Dict, List
-import cbor2
 from Encoder import Encoder
 from FileStream import Encryptor, FileStream
 from ReadableMessageStream import ReadableMessageStream
-from utils import Metadata, key_id
+from utils import MetaData, key_id
 
 class Storage:
 
     streams = {}
 
-    def __init__(self, base_path: str, max_chunk_size: int, encoder: Encoder, encryption_key: str, decryption_keys: List[bytes] = []):
+    def __init__(self, base_path: str, max_chunk_size: int, encoder: Encoder, encryption_key: str, decryption_keys: list[bytes] = []):
         # print(f'Configuring storage (base_path="{base_path}", max_chunk_size={max_chunk_size})')
         self.base_path = base_path
         self.max_chunk_size = max_chunk_size
@@ -51,7 +47,7 @@ class Storage:
         stream.write(pack('<H', length))
         stream.write(encoded_msg)
 
-        print(f"{stream_id} offset={msg.offset()}")
+        # print(f"{stream_id} offset={msg.offset()}")
 
     def create_stream(self, stream_id, msg):
         """Create a new stream"""
@@ -85,11 +81,11 @@ class Storage:
 
             return stream
 
-    def backup_metadata(self, metadata: Metadata):
+    def backup_metadata(self, metadata: MetaData):
         """Backup the metadata to a file"""
         path = f'{self.base_path}/metadata/{metadata.timestamp}'
         file = FileStream(path)
-        data = json.dumps(asdict(metadata)).encode()
+        data = cbor2.dumps(asdict(metadata))
         file.write(data)
         file.close()
 
@@ -108,7 +104,7 @@ class Storage:
     #   Read functions
     #
 
-    def list_restoration_points(self, limit) -> List[int]:
+    def list_restoration_points(self, limit) -> list[int]:
         """Returns the list of restoration points"""
         
         # Local file system
@@ -124,7 +120,7 @@ class Storage:
         # Object storage
         # TODO
 
-    def get_metadata(self, restoration_point_id: str = None) -> Metadata:
+    def get_metadata(self, restoration_point_id: str = None) -> MetaData:
         """Return the metadata for the given restoration point"""
 
         if restoration_point_id is None:
@@ -141,7 +137,7 @@ class Storage:
             return None
         
         with open(metadata_file_path, 'rb') as f:
-            metadata = Metadata(**json.loads(f.read()))
+            metadata = MetaData.fromObj(cbor2.loads(f.read()))
 
         return metadata
 
@@ -158,7 +154,7 @@ class Storage:
         available_topics = os.listdir(topics_path)
         return available_topics
 
-    def list_chunks(self, topic, partition) -> List[str]:
+    def list_chunks(self, topic, partition) -> list[str]:
         """Return the list of backup files that contain data for this topic partition"""
         files = os.listdir(f'{self.base_path}/topics/{topic}/{partition}')
         files.sort()
