@@ -34,7 +34,7 @@ class ReadableMessageStream:
         
         return None
 
-    def load_chunk(self, offset: int = None) -> bool:
+    def _load_chunk(self, offset: int = None) -> bool:
         # Find the chunk that contains the offset
         if self.file is not None:
             self.file.close()
@@ -85,7 +85,7 @@ class ReadableMessageStream:
             return None
 
         if self.file.at_end():
-            self.load_chunk(self.next_offset)
+            self._load_chunk(self.next_offset)
 
         # Read message size
         msg_size = unpack('<H', self.file.read(2))[0]
