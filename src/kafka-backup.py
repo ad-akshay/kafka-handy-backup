@@ -147,7 +147,7 @@ if __name__ == "__main__":
         while not exit_signal and x.is_alive():
             time.sleep(1) # We need to stay in the main thread for the SIGINT signal to be caught
 
-            if all([x.is_alive() for x in threads]):
+            if all([not x.is_alive() for x in threads]):
                 break # All backup completed
             
             # In continuous mode, we want to backup the metadata at periodic intervals
@@ -168,6 +168,7 @@ if __name__ == "__main__":
 
         # Only backup the metadata at the end so that the restoration point is available once topics are properly backed up
         storage.backup_metadata(restoration_point_metadata)
+        print('Backup complete')
 
     elif args.command == 'restore':
         if not args.topics and not args.topics_regex:
