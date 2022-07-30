@@ -192,7 +192,7 @@ if __name__ == "__main__":
             decryption_keys=encryption_keys
         )
 
-        available_topics = storage.list_available_topics()
+        available_topics = storage.available_topics()
 
         # Build the list of topics to backup
         topics_to_restore = []
@@ -342,7 +342,7 @@ if __name__ == "__main__":
         )
 
         print('\nAvailable restoration points:')
-        points = storage.list_restoration_points(args.limit)
+        points = storage.available_restoration_points(args.limit)
         for i in range(0, len(points)):
             epoch = points[i]
             dt = datetime.fromtimestamp(epoch)
@@ -355,7 +355,7 @@ if __name__ == "__main__":
             print(f' {i}) {epoch} : {dt.strftime("%Y-%m-%d %H:%M:%S")} ({diff_string} ago)')
 
         print('\nBacked up topics:')
-        partitions_to_restore = storage.list_available_topics()
+        partitions_to_restore = storage.available_topics()
         partitions_to_restore.sort()
         for t in partitions_to_restore:
             print(f'- {t}')
