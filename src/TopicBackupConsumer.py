@@ -3,22 +3,36 @@
 #
 
 import signal
-from typing import Dict, List
 from confluent_kafka import Consumer, TopicPartition
+from Storage import Storage
+from WritableMessageStream import WritableMessageStream
 from utils import offsetToStr
 from struct import *
 
+KAFKA_BACKUP_CONSUMER_GROUP = 'kafka-backup-topic' # The consumer group used to read the topics
 
 class TopicBackupConsumer:
+    """Class used to backup all the partitions of a specified topic"""
 
+    _exit_task = False
     consumer = None
-    exit_task = False
     assigned_partitions = -1
     completed_partitions = 0
+    continuous = False
 
-    def __init__(self, storage, bootstrap_servers):
+    def __init__(self, storage: Storage, bootstrap_servers: str, topic: str, stop_offsets: dict[int, int], continuous=False):
+        self.continuous = continuous
         self.storage = storage
         self.bootstrap_servers = bootstrap_servers
+        self.topic = topic
+        self.stop_offsets = stop_offsets
+        self.streams: dict[int, WritableMessageStream] = {}
+
+
+    def _get_stream(self, partition: int) -> WritableMessageStream:
+        if partition not in self.streams:
+            self.streams[partition] = self.storage.get_writable_msg_stream(self.topic, partition)
+        return self.streams[partition]
 
     # Consumer callbacks
 
@@ -41,85 +55,72 @@ class TopicBackupConsumer:
     # Tasks control
 
     def stop(self):
-        self.exit_task = True
+        self._exit_task = True
 
-    def start(self, topics_to_backup: List[str], offsets, continuous=False, from_start=False):
+    def start(self, continuous=False):
+        """Start the bakup process
+            @param `stop_offsets` : { <partition> : <last_offset_to_backup> }
+        """
+        self.continuous = continuous
 
-        consumer = Consumer({
-            'group.id': 'kafka-backup-topic',
+        self.consumer = Consumer({
+            'group.id': KAFKA_BACKUP_CONSUMER_GROUP,
             'bootstrap.servers': self.bootstrap_servers,
             'auto.offset.reset': 'smallest', # Which offset to start if there are not committed offset
-            'enable.auto.commit': False
+            'enable.auto.commit': False,
+            'enable.auto.offset.store': False
         })
 
-        # Filter out the topics that have no new messages since last backup or are empty
-        if continuous:
-            topic_list = topics_to_backup
-        else:
-            topic_list = []
-            for topic in topics_to_backup:
-                for p in offsets[topic]:
-                    maxOffset = offsets[topic][p]
-                    partition = consumer.committed([TopicPartition(topic, p)])
-                    print(f'{topic}/{p} : committed={partition[0].offset} max={maxOffset}')
-                    if maxOffset != 0 and maxOffset > partition[0].offset:
-                        topic_list.append(topic)
-                        break
-
-        if len(topic_list) == 0:
-            print('All topics already backed up')
-            consumer.close()
-            return
-
-        print('Subscribing to:', topic_list)
-        consumer.subscribe(topic_list, on_assign=self.on_assign, on_revoke=self.on_revoke, on_lost=self.on_lost)
+        print('Subscribing to:', self.topic)
+        self.consumer.subscribe([self.topic], on_assign=self.on_assign, on_revoke=self.on_revoke, on_lost=self.on_lost)
 
         while True:
-            messages = consumer.consume(timeout=3) # Get messages in batch
+            messages = self.consumer.consume(timeout=5) # Get messages in batch
 
-            if self.exit_task:
+            if self._exit_task:
                 break
 
-            # if len(messages) == 0:
-            #     print(f'Timeout without messages (topic_count={topic_count} assigned_partitions={self.assigned_partitions})')
+            if len(messages) == 0: # No new messages
+                if self.is_backup_completed():
+                    print(f'Backup completed for topic {self.topic}')
+                    break # Exit the loop
 
             for m in messages:
                 if m.error():
-                    print('Message error', m.error())
+                    print('Message error:', m.error())
                 else:
-                    if not continuous:
+                    if not self.continuous:
                         # The maxOffset if defined is our backup stop point
-                        maxOffset = offsets[m.topic()][m.partition()]
+                        maxOffset = self.stop_offsets.get(m.partition())
                         # print(f'maxOffset={maxOffset} m.offset={m.offset()}')
-                        if maxOffset is not None and m.offset() >= (maxOffset - 1):
-                            # Stop consuming from this partition
-                            consumer.pause([TopicPartition(m.topic(), m.partition())])
-                            self.completed_partitions = self.completed_partitions + 1
-                            print(f'Finished backing up {m.topic()}:{m.partition()} (assigned={self.assigned_partitions} paused={self.completed_partitions})')
+                        if m.offset() >= (maxOffset - 1):
+                            # We reached the stop offset for this partition
+                            self.consumer.pause([TopicPartition(m.topic(), m.partition())]) # Stop consuming from this partition
+                            print(f'Finished backing up {m.topic()}/{m.partition()}')
                             if m.offset() > maxOffset:
                                 continue # Ignore messages in the batch that are above the max offset
 
-                    self.storage.backup_message(m)
+                    self._get_stream(m.partition()).write_message(m)
+                    self.consumer.store_offsets(message=m) # Will be commit later
 
-                    consumer.commit(message=m) # TODO: Use the offsets instead
-                    # consumer.commit(offsets=[TopicPartition(m.topic(), m.partition(), m.offset())]) # TODO: Use the offset
+            self.consumer.commit() # Commit stored offsets
 
-            if not continuous and self.completed_partitions == self.assigned_partitions:
-                # We are done backing up the topics
-                print('All topics are backed up')
-                break
+        # Close all remaining streams
+        for s in self.streams.values():
+            s.close()
 
-        print('Stopping task')
-        consumer.close()
-        self.storage.close()
+        self.consumer.close()
+
+    def is_backup_completed(self) -> bool:
+        """Returns True if the backup is complete, False otherwise."""
+        # The backup is considered completed when the consumer committed offset
+        # matches the specified stop offset.
+        for partition_id in self.stop_offsets:
+            maxOffset = self.stop_offsets[partition_id]
+            partition = self.consumer.committed([TopicPartition(self.topic, partition_id)])
+            print(f'{self.topic}/{partition_id} : committed={partition[0].offset} max={maxOffset}')
+            if maxOffset != 0 and maxOffset > partition[0].offset:
+                return False
+        return True
 
 
-if __name__ == "__main__":
-    # Capture interrupt to clean exit
-    def signal_handler(sig, frame):
-        global a
-        a.stop()
-    signal.signal(signal.SIGINT, signal_handler)
-
-    a = TopicBackupConsumer(['test-topic-2', 'test-topic-1'])
-    a.start()

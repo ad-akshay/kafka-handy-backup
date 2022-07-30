@@ -8,6 +8,7 @@ from struct import *
 from Encoder import Encoder
 from FileStream import Encryptor, FileStream
 from ReadableMessageStream import ReadableMessageStream
+from WritableMessageStream import WritableMessageStream
 from utils import MetaData, key_id
 
 class Storage:
@@ -168,10 +169,20 @@ class Storage:
             if minOffset >= offset:
                 return c
 
-    def get_readable_msg_stream(self, topic, partition):
+    def get_readable_msg_stream(self, topic: str, partition: int) -> ReadableMessageStream:
         return ReadableMessageStream(
             topic,
             partition,
             self.decryption_keys,
             self.list_chunks(topic, partition)
+        )
+
+    def get_writable_msg_stream(self, topic: str, partition: int) -> WritableMessageStream:
+        return WritableMessageStream(
+            topic,
+            partition,
+            self.encryption_key,
+            self.max_chunk_size,
+            self.base_path,
+            self.encoder
         )

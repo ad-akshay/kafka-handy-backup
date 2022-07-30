@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from base64 import encodebytes
 from dataclasses import asdict
 from Storage import Storage
-from TopicBackupConsumer import TopicBackupConsumer
+from TopicBackupConsumer import KAFKA_BACKUP_CONSUMER_GROUP, TopicBackupConsumer
 import Metadata
 from Encoder import AVAILABLE_COMPRESSORS, Encoder
 from TopicRestorationProducer import TopicRestorationProducer
@@ -98,16 +98,16 @@ if __name__ == "__main__":
         existing_topics = restoration_point_metadata.topics
 
         # Build the list of topics to backup
-        topics_to_restore = []
+        topics_to_backup = []
         for topic_name in existing_topics:
             if args.topics is not None and topic_name in args.topics:
-                topics_to_restore.append(topic_name)
+                topics_to_backup.append(topic_name)
             elif args.topics_regex is not None and re.match(args.topics_regex, topic_name):
-                topics_to_restore.append(topic_name)
+                topics_to_backup.append(topic_name)
 
-        print(f"Found {len(topics_to_restore)} topics to backup:", topics_to_restore)
+        print(f"Found {len(topics_to_backup)} topics to backup:", topics_to_backup)
 
-        if len(topics_to_restore) == 0:
+        if len(topics_to_backup) == 0:
             print('No topic to backup')
             exit()
 
@@ -124,23 +124,31 @@ if __name__ == "__main__":
             encryption_key=encryption_key
         )
 
-        # Create the task that backups the topics data
-        topic_backup_consumer = TopicBackupConsumer(
-            storage=storage,
-            bootstrap_servers=BOOTSTRAP_SERVERS
-        )
+        consumers = []
+        for topic in topics_to_backup:
+            # Create a TopicBackupConsumer per topic to backup
+            consumers.append(TopicBackupConsumer(
+                storage,
+                BOOTSTRAP_SERVERS,
+                topic,
+                { p.id: p.maxOffset for p in existing_topics[topic].partitions.values() },
+                args.continuous
+            ))
 
-        offsets = {}
-        for topic in topics_to_restore:
-            offsets[topic] = { p.id: p.maxOffset for p in existing_topics[topic].partitions.values() }
-        x = threading.Thread(target=topic_backup_consumer.start, args=(topics_to_restore, offsets, args.continuous))
-        x.start()
+        threads : list[threading.Thread] = []
+        for c in consumers:
+            x = threading.Thread(target=c.start, args=())
+            threads.append(x)
+            x.start()
 
 
         # The topic backup task is started, now we loop to wait until it finisheds or an interrupt signal is received
         elapsed_seconds = 0
         while not exit_signal and x.is_alive():
             time.sleep(1) # We need to stay in the main thread for the SIGINT signal to be caught
+
+            if all([x.is_alive() for x in threads]):
+                break # All backup completed
             
             # In continuous mode, we want to backup the metadata at periodic intervals
             # The metadata backup are the different point-in-time at which we can restore our data
@@ -153,7 +161,10 @@ if __name__ == "__main__":
         
         # If we get here, an exit signal was caught or the topic backup task is done
 
-        topic_backup_consumer.stop()
+        if exit_signal:
+            # An exit signal was caught, we need to stop the remaining active tasks
+            for c in consumers:
+                c.stop()
 
         # Only backup the metadata at the end so that the restoration point is available once topics are properly backed up
         storage.backup_metadata(restoration_point_metadata)
@@ -352,7 +363,7 @@ if __name__ == "__main__":
     elif args.command == 'reset-cursor':
 
         # topic_names = storage.list_available_topics()
-        group = 'kafka-backup-topic' # The group used by the TopicBackupConsumer
+        group = KAFKA_BACKUP_CONSUMER_GROUP # The group used by the TopicBackupConsumer
         meta = Metadata.consumer_details(BOOTSTRAP_SERVERS)
         cd = meta.get(group)
 
