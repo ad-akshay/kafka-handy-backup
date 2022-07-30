@@ -52,7 +52,7 @@ class TopicRestorationProducer():
         print(f'Starting restoration for {self.src_topic}/{self.partition}')
 
         self.msg_stream = self.storage.get_readable_msg_stream(self.src_topic, self.partition)
-        if not self.msg_stream._load_chunk(self.offset_start):
+        if not self.msg_stream.seek(self.offset_start):
             # print(f'ERROR: Could not load chunk for topic {self.src_topic}/{self.partition} offset {self.offset_start}.')
             return
 

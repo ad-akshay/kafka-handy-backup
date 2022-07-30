@@ -21,7 +21,7 @@ class ReadableMessageStream:
         self.decryption_keys = decryption_keys
         self.chunks = chunk_list
         self.file = None
-        self.next_offset = None
+        self.next_offset = None # Holds the offset of the next message to be read
 
     def _get_chunk_name(self, offset: int = None) -> str|None:
         if offset is None and len(self.chunks) > 0:
@@ -35,6 +35,7 @@ class ReadableMessageStream:
         return None
 
     def _load_chunk(self, offset: int = None) -> bool:
+        """Load the chunk that contains the specified offset (default to first available chunk if offset is not specified)"""
         # Find the chunk that contains the offset
         if self.file is not None:
             self.file.close()
@@ -76,7 +77,18 @@ class ReadableMessageStream:
 
         # Configure encoding
         self.encoder = Encoder(header.get('encoding'), header.get('compression'))
-        self.next_offset = int(chunk_name.split('/')[-1].split('_')[0]) + 1
+        self.next_offset = header.get('offset')
+
+        return True
+
+    def seek(self, offset) -> bool:
+        """Move the iterator to the given offset"""
+        if not self._load_chunk(offset):
+            return False
+
+        while self.next_offset > offset:
+            if self.next_message() is None:
+                return False
 
         return True
 
