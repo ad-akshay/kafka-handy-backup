@@ -1,5 +1,4 @@
 #! ../venv/Scripts/python
-#! ../venv/Scripts/python
 import argparse, re, signal, threading, time, os
 from datetime import datetime, timedelta
 from base64 import encodebytes
@@ -28,7 +27,6 @@ p1.add_argument('--continuous', action='store_true', help='Continuous backup mod
 p1.add_argument('--point-in-time-interval', type=int, default=86400, help='Point in time interval (default: 24h)')
 p1.add_argument('--compression', type=str, choices=AVAILABLE_COMPRESSORS, help='Specify compression algorithm for compressing messages')
 p1.add_argument('--encryption-key', type=str, help='256 bits encryption key')
-p1.add_argument('--from-start', type=str, help='Backup from the topic start (not incremental)')
 
 # "list-topics" command parser
 p2 = subparsers.add_parser('list-topics', help='List topics in the cluster')
