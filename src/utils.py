@@ -24,8 +24,8 @@ class PartitionDetails:
     maxOffset: int
     replicas: int
 
-    def __repr__(self):
-        return f'Partition {self.id}: minOffset={self.minOffset} maxOffset={self.maxOffset} replicas={self.replicas} ({self.maxOffset - self.minOffset} messages)'
+    # def __repr__(self):
+    #     return f'Partition {self.id}: minOffset={self.minOffset} maxOffset={self.maxOffset} replicas={self.replicas} ({self.maxOffset - self.minOffset} messages)'
 
 @dataclass
 class TopicDetails:
@@ -35,7 +35,7 @@ class TopicDetails:
     def fromObj(obj):
         return TopicDetails(
             obj['name'],
-            { p['id'] : PartitionDetails(**p) for p in obj['partitions'] }
+            { p['id'] : PartitionDetails(**p) for p in obj['partitions'].values() }
         )
 
     def friendly(self):
@@ -51,8 +51,8 @@ class ConsumerOffset:
     partition: int
     committedOffset: int
 
-    def __repr__(self):
-        return f'{self.topic}/{self.partition} committedOffset={self.committedOffset}'
+    # def __repr__(self):
+    #     return f'{self.topic}/{self.partition} committedOffset={self.committedOffset}'
 
 @dataclass
 class ConsumerDetails:
@@ -72,7 +72,7 @@ class MetaData:
     topics: dict[str, TopicDetails]         # key = <topic-name>
 
     def fromObj(obj):
-        print({ x['group_id']: [ConsumerOffset(**o) for o in x['offsets']] for x in obj['consumers'].values() })
+        # print({ x['group_id']: [ConsumerOffset(**o) for o in x['offsets']] for x in obj['consumers'].values() })
         return MetaData(
             obj['timestamp'],
             { x['group_id']: [ConsumerOffset(**o) for o in x['offsets']] for x in obj['consumers'].values() },

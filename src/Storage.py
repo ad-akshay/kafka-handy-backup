@@ -81,9 +81,10 @@ class Storage:
         file = FileStream(self.object_storage_client).open(path=metadata_file_path, mode='read')
         if file:
             metadata = MetaData.fromObj(cbor2.loads(file.read()))
+            file.close()
         else:
             print(f'ERROR: Restoration point {metadata_file_path} not found')
-            return None 
+            return None
 
         return metadata
 
@@ -104,9 +105,17 @@ class Storage:
 
     def list_chunks(self, topic, partition) -> list[str]:
         """Return the list of backup files/objects that contain data for a topic partition"""
-        files = os.listdir(f'{self.base_path}/topics/{topic}/{partition}')
-        files.sort()
-        return [f'{self.base_path}/topics/{topic}/{partition}/{f}' for f in files]
+
+        if self.object_storage_client:
+            objects = self.object_storage_client.object_list(container_name=self.base_path, prefix=f'topics/{topic}/{partition}')
+            chunks = [ f"{self.base_path}/{o.name}" for o in objects ]
+            chunks.sort()
+            return chunks
+        else:
+            # Local file system
+            files = os.listdir(f'{self.base_path}/topics/{topic}/{partition}')
+            files.sort()
+            return [f'{self.base_path}/topics/{topic}/{partition}/{f}' for f in files]
 
     def get_chunk(self, topic, partition, offset):
         """Return the name of the chunk that contains a specific offset for a topic partition"""

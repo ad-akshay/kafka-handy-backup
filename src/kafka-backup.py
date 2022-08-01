@@ -17,6 +17,7 @@ from confluent_kafka import TopicPartition
 # Define command line arguments
 parser = argparse.ArgumentParser()
 subparsers = parser.add_subparsers(dest='command')
+parser.add_argument('--verbose', action='store_true')
 
 # "backup" command parser
 p1 = subparsers.add_parser('backup', help='Backup selected topics from the specified cluster')
@@ -29,7 +30,7 @@ p1.add_argument('--continuous', action='store_true', help='Continuous backup mod
 p1.add_argument('--point-in-time-interval', type=int, default=86400, help='Point in time interval (default: 24h)')
 p1.add_argument('--compression', type=str, choices=AVAILABLE_COMPRESSORS, help='Specify compression algorithm for compressing messages')
 p1.add_argument('--encryption-key', type=str, help='256 bits encryption key')
-p1.add_argument('--swift-url', type=str, help='OpenStack Swift URL. When set, uploads the chunks to OpenStack swift storage.')
+p1.add_argument('--swift-url', type=str, help='OpenStack Swift URL')
 
 # "list-topics" command parser
 p2 = subparsers.add_parser('list-topics', help='List topics in the cluster')
@@ -49,31 +50,29 @@ p3.add_argument('--dry-run', action='store_true', help='Do not actually perform 
 p3.add_argument('--point-in-time', type=str, help="Manually select a restoration point (use the `backup-info` command to list available options")
 p3.add_argument('--encryption-key', dest='encryption_keys', action='append', type=str, help="Key used for decrypting the data. This option can be used multiple times to specify more than one key if multiple keys were used for encryption.")
 p3.add_argument('--restore-offsets', action='store_true', help="Restore the consumer offsets")
+p3.add_argument('--swift-url', type=str, help='OpenStack Swift URL')
 
 
 # "backup-info" command parser
 p4 = subparsers.add_parser('backup-info', help='Print information on the backed up info')
 p4.add_argument('--limit', type=int, default=10, help='Max number of lines to print')
 p4.add_argument('--directory', type=str, default='kafka-backup-data', help='Backup directory/container (default="kafka-backup-data")')
-p4.add_argument('--swift-url', type=str, help='OpenStack Swift URL. When set, uploads the chunks to OpenStack swift storage.')
+p4.add_argument('--swift-url', type=str, help='OpenStack Swift URL')
 
 # "reset-cursor"
 p5 = subparsers.add_parser('reset-cursor', help='Reset the committed consumer offset of the kafka backup consumer so that new backups will start from the beginning of each topic')
 p5.add_argument('--bootstrap-servers', type=str)
 p5.add_argument('--confirm', action='store_true', help='Set to cctually execute the command')
-p5.add_argument('--topics-regex', type=str, help='Topics to restore')
+# p5.add_argument('--topics-regex', type=str, help='Topics to reset cursor')
 
 # Parse the input arguments
 args = parser.parse_args()
 
 if __name__ == "__main__":
 
-
-    log_level = 'info'
-
-    if log_level == 'debug':
+    if args.verbose:
         logging.basicConfig(format='%(levelname)s [%(module)s] %(message)s', level=logging.DEBUG)
-    else: # info
+    else:
         logging.basicConfig(format='%(message)s', level=logging.INFO)
 
     # Capture system signals to implement graceful exit
@@ -204,7 +203,8 @@ if __name__ == "__main__":
             max_chunk_size=10,
             encoder=Encoder(),
             encryption_key=None,
-            decryption_keys=encryption_keys
+            decryption_keys=encryption_keys,
+            swift_url=args.swift_url
         )
 
         available_topics = storage.available_topics()
@@ -281,7 +281,7 @@ if __name__ == "__main__":
         if len(topics_to_restore) > 0:
             print(f'Topics/partitions to restore:')
         for t in topics_to_restore:
-            for p in t['partitions']:
+            for p in t['partitions'].values():
                 print(f"- {t['source']}/{p.id} ({p.minOffset}, {p.maxOffset}) -> {t['destination']}/{ f'{p.id} ({d.partitions[p.id].maxOffset}, {d.partitions[p.id].maxOffset + p.maxOffset - p.minOffset})' if args.original_partitions else 'any'}")
 
         if len(errors) > 0 and not args.ignore_errors:
@@ -302,7 +302,7 @@ if __name__ == "__main__":
         # Create producers that will restore the topic-partitions
         producers = []
         for t in topics_to_restore:
-            for p in t['partitions']:
+            for p in t['partitions'].values():
                 producers.append(TopicRestorationProducer(
                     src_topic=t['source'],
                     partition=p.id,

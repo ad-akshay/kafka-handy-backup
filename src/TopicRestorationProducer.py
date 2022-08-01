@@ -103,9 +103,10 @@ class TopicRestorationProducer():
             offset_variation = p.maxOffset - next_offset
 
             # For each consumer that have a committed offset for this topic-partition
+            # print(self.consumer_offsets)
             for group in self.consumer_offsets:
                 for co in self.consumer_offsets[group]:
-                    print(co)
+                    # print(co)
                     if self.src_topic == co.topic and self.partition == co.partition:
                         # This offset applies to this topic partition
 
@@ -115,8 +116,8 @@ class TopicRestorationProducer():
                         new_offset = co.committedOffset + offset_variation
                         
                         # Restore the committed offset
-                        print(f'Committing offset: {self.dst_topic}/{self.partition} for {group.group_id} to {new_offset}')
-                        setCommittedOffset(group.group_id, self.dst_topic, self.partition, new_offset, self.bootstrap_server)
+                        print(f'Committing offset: {self.dst_topic}/{self.partition} for {group} to {new_offset}')
+                        setCommittedOffset(group, self.dst_topic, self.partition, new_offset, self.bootstrap_server)
         
 
         print(f'Restoration of {self.src_topic}/{self.partition} completed up to offset {msg.offset}')
