@@ -3,6 +3,7 @@ Interface to the storage system
 """
 
 from dataclasses import asdict
+import logging
 import os, cbor2
 from struct import *
 from Encoder import Encoder
@@ -10,6 +11,9 @@ from FileStream import Encryptor, FileStream
 from ReadableMessageStream import ReadableMessageStream
 from WritableMessageStream import WritableMessageStream
 from utils import MetaData, key_id
+
+
+logger = logging.getLogger(__name__)
 
 class Storage:
     """
@@ -29,6 +33,7 @@ class Storage:
 
     def backup_metadata(self, metadata: MetaData):
         """Save the given metadata to a file (creates a restoration point)"""
+        logger.info(f'Creating restoration point at {metadata.timestamp}')
         path = f'{self.base_path}/metadata/{metadata.timestamp}'
         file = FileStream(path)
         data = cbor2.dumps(asdict(metadata))

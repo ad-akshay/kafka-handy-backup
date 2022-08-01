@@ -2,12 +2,13 @@
 # Kafka consumer that backups the topic messages
 #
 
-import signal
 from confluent_kafka import Consumer, TopicPartition
 from Storage import Storage
 from WritableMessageStream import WritableMessageStream
-from utils import offsetToStr
 from struct import *
+import logging
+
+logger = logging.getLogger(__name__)
 
 KAFKA_BACKUP_CONSUMER_GROUP = 'kafka-backup-topic' # The consumer group used to read the topics
 
@@ -40,28 +41,29 @@ class TopicBackupConsumer:
         if self.assigned_partitions == -1: self.assigned_partitions = 0
         self.assigned_partitions = self.assigned_partitions + len(partitions)
         partitions = consumer.committed(partitions) # Get the real consumer offsets
-        print('on_assign:', [f'{p.topic}:{p.partition} offset={offsetToStr(p.offset)}' for p in partitions])
+        logger.debug(f'Partitions {",".join([str(p.partition) for p in partitions])} of topic {partitions[0].topic} assigned')
 
     def on_revoke(self, consumer, partitions):
         self.assigned_partitions = self.assigned_partitions - len(partitions)
         self.completed_partitions = self.completed_partitions - len(partitions)
-        print('on_revoke:', [f'{p.topic}:{p.partition}' for p in partitions])
+        logger.debug(f'Partitions {",".join([str(p.partition) for p in partitions])} of topic {partitions[0].topic} revoked')
 
     def on_lost(self, consumer, partitions):
         self.assigned_partitions = self.assigned_partitions - len(partitions)
         self.completed_partitions = self.completed_partitions - len(partitions)
-        print('on_revoke:', [f'{p.topic}:{p.partition}' for p in partitions])
+        logger.debug(f'Partitions {",".join([str(p.partition) for p in partitions])} for topic {partitions[0].topic} lost')
 
     # Tasks control
 
     def stop(self):
         self._exit_task = True
 
-    def start(self, continuous=False):
+    def start(self, continuous=None):
         """Start the bakup process
             @param `stop_offsets` : { <partition> : <last_offset_to_backup> }
         """
-        self.continuous = continuous
+        if continuous is not None:
+            self.continuous = continuous
 
         self.consumer = Consumer({
             'group.id': KAFKA_BACKUP_CONSUMER_GROUP,
@@ -71,7 +73,7 @@ class TopicBackupConsumer:
             'enable.auto.offset.store': False
         })
 
-        print('Subscribing to:', self.topic)
+        logging.info(f'Creating consumer for topic {self.topic}')
         self.consumer.subscribe([self.topic], on_assign=self.on_assign, on_revoke=self.on_revoke, on_lost=self.on_lost)
 
         while True:
@@ -81,13 +83,13 @@ class TopicBackupConsumer:
                 break
 
             if len(messages) == 0: # No new messages
-                if self.is_backup_completed():
-                    print(f'Backup completed for topic {self.topic}')
+                if not self.continuous and self.is_backup_completed():
+                    logging.info(f'Backup complete for topic {self.topic}')
                     break # Exit the loop
 
             for m in messages:
                 if m.error():
-                    print('Message error:', m.error())
+                    logging.warning(f'Message error: {m.error()}')
                 else:
                     if not self.continuous:
                         # The maxOffset if defined is our backup stop point
@@ -96,7 +98,7 @@ class TopicBackupConsumer:
                         if m.offset() >= (maxOffset - 1):
                             # We reached the stop offset for this partition
                             self.consumer.pause([TopicPartition(m.topic(), m.partition())]) # Stop consuming from this partition
-                            print(f'Finished backing up {m.topic()}/{m.partition()}')
+                            logging.info(f'Finished backing up {m.topic()}/{m.partition()}')
                             if m.offset() > maxOffset:
                                 continue # Ignore messages in the batch that are above the max offset
 
@@ -118,7 +120,7 @@ class TopicBackupConsumer:
         for partition_id in self.stop_offsets:
             maxOffset = self.stop_offsets[partition_id]
             partition = self.consumer.committed([TopicPartition(self.topic, partition_id)])
-            print(f'{self.topic}/{partition_id} : committed={partition[0].offset} max={maxOffset}')
+            # print(f'{self.topic}/{partition_id} : committed={partition[0].offset} max={maxOffset}')
             if maxOffset != 0 and maxOffset > partition[0].offset:
                 return False
         return True

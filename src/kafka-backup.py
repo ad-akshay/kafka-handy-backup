@@ -1,8 +1,10 @@
 #! ../venv/Scripts/python
+
+# Configure logger module before importing anything else, so that the config applies in other imported modules
+import logging
+
 import argparse, re, signal, threading, time, os
-from datetime import datetime, timedelta
-from base64 import encodebytes
-from dataclasses import asdict
+from datetime import datetime
 from Storage import Storage
 from TopicBackupConsumer import KAFKA_BACKUP_CONSUMER_GROUP, TopicBackupConsumer
 import Metadata
@@ -64,6 +66,14 @@ args = parser.parse_args()
 
 if __name__ == "__main__":
 
+
+    log_level = 'info'
+
+    if log_level == 'debug':
+        logging.basicConfig(format='%(levelname)s [%(module)s] %(message)s', level=logging.DEBUG)
+    else: # info
+        logging.basicConfig(format='%(message)s', level=logging.INFO)
+
     # Capture system signals to implement graceful exit
     exit_signal = False
     def signal_handler(sig, frame):
@@ -102,6 +112,9 @@ if __name__ == "__main__":
                 topics_to_backup.append(topic_name)
             elif args.topics_regex is not None and re.match(args.topics_regex, topic_name):
                 topics_to_backup.append(topic_name)
+
+        if args.continuous:
+            print(f'Starting backup in continuous mode')
 
         print(f"Found {len(topics_to_backup)} topics to backup:", topics_to_backup)
 
@@ -327,9 +340,9 @@ if __name__ == "__main__":
             else:
                 print(f'- {t.name} ({len(t.partitions)} partitions, {max([x.replicas for x in t.partitions.values()])} replicas)')
 
-        print('\nConsumers info:')
-        for c in Metadata.consumer_details(BOOTSTRAP_SERVERS).values():
-            print(c.friendly())
+        # print('\nConsumers info:')
+        # for c in Metadata.consumer_details(BOOTSTRAP_SERVERS).values():
+        #     print(c.friendly())
 
     elif args.command == 'backup-info':
         # Configure the storage backend

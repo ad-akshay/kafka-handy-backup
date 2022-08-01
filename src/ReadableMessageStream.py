@@ -3,6 +3,7 @@
 #
 
 
+import logging
 from struct import unpack
 from typing import Dict, List
 from Encoder import Encoder
@@ -12,6 +13,8 @@ import cbor2
 from confluent_kafka import Message
 
 from utils import KafkaMessage
+
+logger = logging.getLogger(__name__)
 
 class ReadableMessageStream:
 
@@ -43,21 +46,21 @@ class ReadableMessageStream:
 
         chunk_name = self._get_chunk_name(offset)
         if chunk_name is None:
-            print(f'ERROR: Could not find chunk for offset {offset}. Chunk does not seem to exist. Is this topic backed up ?')
+            logger.error(f'ERROR: Could not find chunk for offset {offset}. Chunk does not seem to exist. Is this topic backed up ?')
             return False # Could not load chunk
 
         self.file = FileStream(chunk_name, mode='read')
 
-        print(f'Loading file {chunk_name} of size {self.file.size()}')
+        logger.debug(f'Loading chunk {chunk_name} (size: {self.file.size()} bytes)')
         # Read header (header is not encrypted)
         tmp = self.file.read(2, disable_decryption=True)
         header_size = unpack('<H', tmp)[0]
-        header_cbor = self.file.read(header_size, disable_decryption=True)          # CBOR encoded header
+        header_cbor = self.file.read(header_size, disable_decryption=True) # CBOR encoded header
         
         try:
             header : Dict = cbor2.loads(header_cbor)
         except:
-            print(f'ERROR: Invalid CBOR header for chunk {chunk_name}. Chunk seems corrupted.')
+            logger.error(f'ERROR: Invalid CBOR header for chunk {chunk_name}. Chunk seems corrupted.')
             self.file.close()
             self.file = None
             return False
@@ -68,7 +71,7 @@ class ReadableMessageStream:
             iv = header.get('iv')
             key = self.decryption_keys.get(keyId)
             if not key:
-                print(f'ERROR: Encryption key not found for chunk {chunk_name} (key-id={keyId}). Add encryption keys with the --encryption-key option.')
+                logger.error(f'ERROR: Encryption key not found for chunk {chunk_name} (key-id={keyId}). Add encryption keys with the --encryption-key option.')
                 self.file.close()
                 self.file = None
                 return False
