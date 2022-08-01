@@ -65,11 +65,9 @@ class TopicRestorationProducer():
         next_offset = self.offset_start # Which offset to restore next
         for msg in self.msg_stream:
             # print("Restoring", msg)
+            # print(f'next_offset={next_offset} msg.offset={msg.offset} self.offset_stop={self.offset_stop}')
             
             if self._exit_signal:
-                break
-
-            if msg.offset+1 >= self.offset_stop:
                 break
 
             if next_offset > msg.offset:
@@ -87,6 +85,9 @@ class TopicRestorationProducer():
                 )
 
             next_offset += 1
+
+            if msg.offset + 1 >= self.offset_stop:
+                break
 
         producer.flush()
 

@@ -97,12 +97,13 @@ class ReadableMessageStream:
 
         return True
 
-    def next_message(self) -> KafkaMessage:
+    def next_message(self) -> KafkaMessage|None:
         if self.file is None:
             return None
 
         if self.file.at_end():
-            self._load_chunk(self.next_offset)
+            if not self._load_chunk(self.next_offset):
+                return None
 
         # Read message size
         msg_size = unpack('<H', self.file.read(2))[0]

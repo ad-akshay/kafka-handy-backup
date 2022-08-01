@@ -94,13 +94,15 @@ class TopicBackupConsumer:
                     if not self.continuous:
                         # The maxOffset if defined is our backup stop point
                         maxOffset = self.stop_offsets.get(m.partition())
+                        # 199 == 200-1
                         # print(f'maxOffset={maxOffset} m.offset={m.offset()}')
-                        if m.offset() >= (maxOffset - 1):
+                        if m.offset() == (maxOffset - 1):
                             # We reached the stop offset for this partition
                             self.consumer.pause([TopicPartition(m.topic(), m.partition())]) # Stop consuming from this partition
-                            logging.info(f'Finished backing up {m.topic()}/{m.partition()}')
-                            if m.offset() > maxOffset:
-                                continue # Ignore messages in the batch that are above the max offset
+                            logging.info(f'Finished backing up {m.topic()}/{m.partition()}, last_offset={m.offset()}')
+                        elif m.offset() > (maxOffset - 1):
+                            # print(f'Ignoring {m.topic()}/{m.partition()}:{m.offset()}')
+                            continue # Ignore messages in the batch that are above the max offset
 
                     self._get_stream(m.partition()).write_message(m)
                     self.consumer.store_offsets(message=m) # Will be commit later

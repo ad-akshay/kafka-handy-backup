@@ -100,6 +100,7 @@ class Storage:
             topics_path = self.base_path + '/topics'
             if not os.path.exists(topics_path):
                 print(f'Topics path "{topics_path} does not exist')
+                return []
             available_topics = os.listdir(topics_path)
             return available_topics
 
