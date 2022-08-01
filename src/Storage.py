@@ -52,53 +52,55 @@ class Storage:
 
     def available_restoration_points(self, limit) -> list[int]:
         """Returns the list of available restoration points"""
-        
-        # Local file system
-        metadata_path = self.base_path + '/metadata'
-        metadata_files = [f for f in os.listdir(metadata_path) if os.path.isfile(os.path.join(metadata_path, f))]
-        metadata_files.sort(reverse=True) # Latest first
+        if self.object_storage_client:
+            # Object storage
+            objects = self.object_storage_client.object_list(container_name=self.base_path, prefix='metadata/')
+            metadata_files = [o.name.split('/')[1] for o in objects]
+        else:
+            # Local file system
+            metadata_path = self.base_path + '/metadata'
+            metadata_files = [f for f in os.listdir(metadata_path) if os.path.isfile(os.path.join(metadata_path, f))]
+            metadata_files.sort(reverse=True) # Latest first
 
         if limit is not None and limit > 0:
             metadata_files = metadata_files[0:limit]
 
         return [int(f) for f in metadata_files]
 
-        # Object storage
-        # TODO
-
     def get_metadata(self, restoration_point_id: str = None) -> MetaData:
         """Return the metadata for the specified restoration point"""
-
+        
         if restoration_point_id is None:
             # Default to latest restoration point
             rp = self.available_restoration_points(limit=1)
             if len(rp) == 0:
                 return None
             restoration_point_id = str(rp[0])
-        
-        # Local file system
+
         metadata_file_path = self.base_path + '/metadata/' + restoration_point_id
-        if not os.path.exists(metadata_file_path):
+        file = FileStream(self.object_storage_client).open(path=metadata_file_path, mode='read')
+        if file:
+            metadata = MetaData.fromObj(cbor2.loads(file.read()))
+        else:
             print(f'ERROR: Restoration point {metadata_file_path} not found')
-            return None
-        
-        with open(metadata_file_path, 'rb') as f:
-            metadata = MetaData.fromObj(cbor2.loads(f.read()))
+            return None 
 
         return metadata
-
-        # Object storage
-        # TODO
 
     def available_topics(self):
         """Return a list of available (backed up) topics"""
 
-        # Local file system
-        topics_path = self.base_path + '/topics'
-        if not os.path.exists(topics_path):
-            print(f'Topics path "{topics_path} does not exist')
-        available_topics = os.listdir(topics_path)
-        return available_topics
+        if self.object_storage_client:
+            objects = self.object_storage_client.object_list(container_name=self.base_path, prefix='topics/', delimiter='/')
+            available_topics = [ t.subdir.split('/')[1] for t in objects if (isinstance(t, SubdirInfo)) ]
+            return available_topics
+        else:
+            # Local file system
+            topics_path = self.base_path + '/topics'
+            if not os.path.exists(topics_path):
+                print(f'Topics path "{topics_path} does not exist')
+            available_topics = os.listdir(topics_path)
+            return available_topics
 
     def list_chunks(self, topic, partition) -> list[str]:
         """Return the list of backup files/objects that contain data for a topic partition"""

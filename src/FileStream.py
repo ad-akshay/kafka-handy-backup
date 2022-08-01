@@ -7,7 +7,7 @@ import time
 from Encryptor import Encryptor
 import logging
 
-from universal_osc import ObjectStorageClient, SwiftClient
+from universal_osc.ObjectStorageClient import ObjectStorageClient
 
 logger = logging.getLogger(__name__)
 
@@ -42,33 +42,50 @@ class FileStream:
         logging.debug(f'Closing {self.filePath}')
         self.file.close()
         
-        if self.client: # Object storage backend configured
-            logging.info(f'Uploading {self.filePath} to object storage')
-            start_time = time.time()
-            ok = self.client.upload_file(self.filePath, self.filePath)
-            if ok:
+        if self.client: 
+            # Object storage backend configured
+            if self.mode == 'write':
+                logging.info(f'Uploading {self.filePath} to object storage')
+                start_time = time.time()
+                ok = self.client.upload_file(self.filePath, self.filePath)
                 logging.debug(f'Uploading {self.filePath} ({round(self.size()/1024/1024)} Mb) completed in {round(time.time() - start_time, 2)} seconds')
-                os.remove(self.filePath) # We don't need the local file anymore
+                if ok:
+                    logging.debug(f'Deleting {self.filePath} from local file system')
+                    os.remove(self.filePath) # We don't need the local file anymore
+                else:
+                    logger.error(f'ERROR: Could not upload file {self.filePath} to object storage')
+                    # TODO: What should we do here ? Retry uploading later ? For now the file remains on the local file system.
             else:
-                logger.error(f'ERROR: Could not upload file {self.filePath} to object storage')
-        
+                # Read mode, we can delete the file once we're done with it
+                logging.debug(f'Deleting {self.filePath} from local file system')
+                os.remove(self.filePath) # We don't need the local file anymore
+
 
     def open(self, path: str, mode: str = 'read'):
         self.filePath = path
+        self.mode = mode
         logging.debug(f'Opening {self.filePath}')
 
         if mode == 'write':
+            # Local file system
             logging.debug(f'Creating {self.filePath}')
             os.makedirs(os.path.dirname(self.filePath), exist_ok=True) # Create missing directories
             self.file = open(self.filePath , 'wb')
             self._size = 0
+            return self
         else:
-            # if self.client and not os.path.exists(self.filePath):
-            #     os.makedirs(os.path.dirname(self.filePath), exist_ok=True) # Create missing directories
-                # Download the chunk
-                # self.client.download_file(self.filePath, self.filePath)
+            if self.client:
+                # Object storage is configured, we need to download the file first
+                os.makedirs(os.path.dirname(self.filePath), exist_ok=True) # Make sure the target file system directory exist
+                logger.debug(f'Downloading chunk {self.filePath}')
+                ok = self.client.upload_file(self.filePath, self.filePath)
+                if not ok:
+                    logger.error(f'ERROR downloading chunk {self.filePath}')
 
-            logging.debug(f'Opening {self.filePath}')
+            if not os.path.exists(self.filePath):
+                return None
+            
+            # Local file system
             self.file = open(self.filePath, 'rb')
             self.file.seek(0, 2) # Go to end of file
             self._size = self.file.tell()

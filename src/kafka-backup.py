@@ -54,7 +54,8 @@ p3.add_argument('--restore-offsets', action='store_true', help="Restore the cons
 # "backup-info" command parser
 p4 = subparsers.add_parser('backup-info', help='Print information on the backed up info')
 p4.add_argument('--limit', type=int, default=10, help='Max number of lines to print')
-p4.add_argument('--directory', type=str, default='backup', help='Backup directory/container (default="backup")')
+p4.add_argument('--directory', type=str, default='kafka-backup-data', help='Backup directory/container (default="kafka-backup-data")')
+p4.add_argument('--swift-url', type=str, help='OpenStack Swift URL. When set, uploads the chunks to OpenStack swift storage.')
 
 # "reset-cursor"
 p5 = subparsers.add_parser('reset-cursor', help='Reset the committed consumer offset of the kafka backup consumer so that new backups will start from the beginning of each topic')
@@ -68,7 +69,7 @@ args = parser.parse_args()
 if __name__ == "__main__":
 
 
-    log_level = 'debug'
+    log_level = 'info'
 
     if log_level == 'debug':
         logging.basicConfig(format='%(levelname)s [%(module)s] %(message)s', level=logging.DEBUG)
@@ -352,7 +353,8 @@ if __name__ == "__main__":
             base_path=args.directory,
             max_chunk_size=100, # Whatever value, we're not writing anyway
             encoder=Encoder(),
-            encryption_key=None
+            encryption_key=None,
+            swift_url=args.swift_url
         )
 
         print('\nAvailable restoration points:')
