@@ -78,7 +78,7 @@ class FileStream:
                 # Object storage is configured, we need to download the file first
                 os.makedirs(os.path.dirname(self.filePath), exist_ok=True) # Make sure the target file system directory exist
                 logger.debug(f'Downloading chunk {self.filePath}')
-                ok = self.client.upload_file(self.filePath, self.filePath)
+                ok = self.client.download_file(self.filePath, self.filePath)
                 if not ok:
                     logger.error(f'ERROR downloading chunk {self.filePath}')
 
