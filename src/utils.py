@@ -1,5 +1,4 @@
 import hashlib
-from typing import Dict, List
 from dataclasses import dataclass
 from confluent_kafka import Consumer, TopicPartition, OFFSET_BEGINNING, OFFSET_END, OFFSET_INVALID, OFFSET_STORED
 
@@ -30,7 +29,7 @@ class PartitionDetails:
 @dataclass
 class TopicDetails:
     name: str
-    partitions: dict[PartitionDetails]
+    partitions: dict[int, PartitionDetails]
 
     def fromObj(obj):
         return TopicDetails(
