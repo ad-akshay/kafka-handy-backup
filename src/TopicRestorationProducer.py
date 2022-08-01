@@ -8,7 +8,7 @@ from Storage import Storage
 from confluent_kafka import Producer
 import Metadata
 
-from utils import ConsumerDetails, PartitionDetails, TopicDetails, setCommittedOffset
+from utils import ConsumerDetails, setCommittedOffset
 
 class TopicRestorationProducer():
 
