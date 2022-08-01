@@ -7,10 +7,12 @@ import logging
 import os, cbor2
 from struct import *
 from Encoder import Encoder
-from FileStream import Encryptor, FileStream
+from FileStream import FileStream
 from ReadableMessageStream import ReadableMessageStream
 from WritableMessageStream import WritableMessageStream
 from utils import MetaData, key_id
+from universal_osc.SwiftClient import SwiftClient
+from universal_osc.ObjectStorageClient import *
 
 
 logger = logging.getLogger(__name__)
@@ -23,7 +25,9 @@ class Storage:
     the storage backend.
     """
 
-    def __init__(self, base_path: str, max_chunk_size: int, encoder: Encoder, encryption_key: str, decryption_keys: list[bytes] = []):
+    object_storage_client: ObjectStorageClient = None
+
+    def __init__(self, base_path: str, max_chunk_size: int, encoder: Encoder, encryption_key: str, decryption_keys: list[bytes] = [], swift_url: str = None):
         # print(f'Configuring storage (base_path="{base_path}", max_chunk_size={max_chunk_size})')
         self.base_path = base_path
         self.max_chunk_size = max_chunk_size
@@ -31,11 +35,17 @@ class Storage:
         self.encryption_key = encryption_key
         self.decryption_keys = { key_id(x):x for x in decryption_keys }
 
+        if swift_url:
+            self.object_storage_client = SwiftClient(swift_url)
+            if self.object_storage_client.container_info(self.base_path) is None: # Container does not exist
+                if not self.object_storage_client.container_create(self.base_path): # Can't create the container
+                    logger.error(f'ERROR: Could not create container {self.base_path} on storage backend')
+
     def backup_metadata(self, metadata: MetaData):
         """Save the given metadata to a file (creates a restoration point)"""
         logger.info(f'Creating restoration point at {metadata.timestamp}')
         path = f'{self.base_path}/metadata/{metadata.timestamp}'
-        file = FileStream(path)
+        file = FileStream(self.object_storage_client).open(path, 'write')
         data = cbor2.dumps(asdict(metadata))
         file.write(data)
         file.close()
@@ -110,7 +120,8 @@ class Storage:
             topic,
             partition,
             self.decryption_keys,
-            self.list_chunks(topic, partition)
+            self.list_chunks(topic, partition),
+            self.object_storage_client
         )
 
     def get_writable_msg_stream(self, topic: str, partition: int) -> WritableMessageStream:
@@ -121,5 +132,6 @@ class Storage:
             self.encryption_key,
             self.max_chunk_size,
             self.base_path,
-            self.encoder
+            self.encoder,
+            self.object_storage_client
         )

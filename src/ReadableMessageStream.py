@@ -13,12 +13,14 @@ import cbor2
 from confluent_kafka import Message
 
 from utils import KafkaMessage
+from universal_osc import ObjectStorageClient
 
 logger = logging.getLogger(__name__)
 
 class ReadableMessageStream:
 
-    def __init__(self, topic: str, partition: int, decryption_keys: Dict, chunk_list: List[str]):
+    def __init__(self, topic: str, partition: int, decryption_keys: Dict, chunk_list: List[str], object_storage_client: ObjectStorageClient = None):
+        self.object_storage_client = object_storage_client
         self.topic = topic
         self.partition = partition
         self.decryption_keys = decryption_keys
@@ -49,7 +51,7 @@ class ReadableMessageStream:
             logger.error(f'ERROR: Could not find chunk for offset {offset}. Chunk does not seem to exist. Is this topic backed up ?')
             return False # Could not load chunk
 
-        self.file = FileStream(chunk_name, mode='read')
+        self.file = FileStream(self.object_storage_client).open(chunk_name, mode='read')
 
         logger.debug(f'Loading chunk {chunk_name} (size: {self.file.size()} bytes)')
         # Read header (header is not encrypted)

@@ -1,13 +1,10 @@
-
-
-
+import cbor2
 from struct import pack
 from Encoder import Encoder
 from Encryptor import Encryptor
 from FileStream import FileStream
 from confluent_kafka import Message
-import cbor2
-
+from universal_osc import ObjectStorageClient
 from utils import key_id
 
 class WritableMessageStream:
@@ -16,7 +13,7 @@ class WritableMessageStream:
     It automatically split the data into chunks so the caller does not have to handle that.
     """
 
-    def __init__(self, topic: str, partition: int, encryption_key: str, max_chunk_size: int, base_path: str, encoder: Encoder):
+    def __init__(self, topic: str, partition: int, encryption_key: str, max_chunk_size: int, base_path: str, encoder: Encoder, object_storage_client: ObjectStorageClient = None):
         self.topic = topic
         self.partition = partition
         self.encryption_key = encryption_key
@@ -24,11 +21,12 @@ class WritableMessageStream:
         self.max_chunk_size = max_chunk_size
         self.base_path = base_path
         self.encoder = encoder
+        self.object_storage_client = object_storage_client
 
     def __new_chunk(self, msg: Message):
         """Create a new chunk of data"""
         path = f"{self.base_path}/topics/{msg.topic()}/{msg.partition()}/{msg.offset()}_{msg.timestamp()[1]}"
-        self.file = FileStream(path, mode='write')
+        self.file = FileStream(self.object_storage_client).open(path, mode='write')
 
         # If encryption is configured, create an set the encryptor for that stream
         if self.encryption_key:

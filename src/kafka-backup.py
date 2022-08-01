@@ -24,11 +24,12 @@ p1.add_argument('--topic', '-t', dest='topics', action='append', help='Topics to
 p1.add_argument('--topics-regex', type=str, help='Topics to backup')
 p1.add_argument('--bootstrap-servers', type=str)
 p1.add_argument('--max-chunk-size', type=int, default=1000000, help='Maximum size of chunk (files) in bytes (default = 1Gb)')
-p1.add_argument('--directory', type=str, default='backup', help='Output directory/container (default="backup")')
+p1.add_argument('--directory', type=str, default='kafka-backup-data', help='Output directory/container (default="kafka-backup-data")')
 p1.add_argument('--continuous', action='store_true', help='Continuous backup mode')
 p1.add_argument('--point-in-time-interval', type=int, default=86400, help='Point in time interval (default: 24h)')
 p1.add_argument('--compression', type=str, choices=AVAILABLE_COMPRESSORS, help='Specify compression algorithm for compressing messages')
 p1.add_argument('--encryption-key', type=str, help='256 bits encryption key')
+p1.add_argument('--swift-url', type=str, help='OpenStack Swift URL. When set, uploads the chunks to OpenStack swift storage.')
 
 # "list-topics" command parser
 p2 = subparsers.add_parser('list-topics', help='List topics in the cluster')
@@ -38,7 +39,7 @@ p2.add_argument('--details', action='store_true', help='Show partition details')
 # "restore" command parser
 p3 = subparsers.add_parser('restore', help='Restore backed up topics to the cluster')
 p3.add_argument('--bootstrap-servers', type=str)
-p3.add_argument('--directory', type=str, default='backup', help='Backup directory/container (default="backup")')
+p3.add_argument('--directory', type=str, default='kafka-backup-data', help='Backup directory/container (default="kafka-backup-data")')
 p3.add_argument('--topic', '-t', dest='topics', action='append', help='Topics to backup')
 p3.add_argument('--topics-regex', type=str, help='Topics to restore')
 p3.add_argument('--ignore-partitions', dest='original_partitions', action='store_false', help='Ignore the original message partitions when publishing')
@@ -67,7 +68,7 @@ args = parser.parse_args()
 if __name__ == "__main__":
 
 
-    log_level = 'info'
+    log_level = 'debug'
 
     if log_level == 'debug':
         logging.basicConfig(format='%(levelname)s [%(module)s] %(message)s', level=logging.DEBUG)
@@ -132,7 +133,8 @@ if __name__ == "__main__":
             base_path=args.directory,
             max_chunk_size=args.max_chunk_size,
             encoder=encoder,
-            encryption_key=encryption_key
+            encryption_key=encryption_key,
+            swift_url=args.swift_url
         )
 
         consumers = []
