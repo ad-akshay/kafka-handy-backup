@@ -13,7 +13,7 @@ from TopicRestorationProducer import TopicRestorationProducer
 from utils import TopicDetails, setCommittedOffsets
 from confluent_kafka import TopicPartition
 
-VERSION = '0.0.1'
+VERSION = "0.0.1"
 
 # Define command line arguments
 parser = argparse.ArgumentParser()
