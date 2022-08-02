@@ -13,11 +13,14 @@ from TopicRestorationProducer import TopicRestorationProducer
 from utils import TopicDetails, setCommittedOffsets
 from confluent_kafka import TopicPartition
 
+VERSION = '0.0.1'
 
 # Define command line arguments
 parser = argparse.ArgumentParser()
 subparsers = parser.add_subparsers(dest='command')
 parser.add_argument('--verbose', action='store_true')
+
+subparsers.add_parser('version', help='Print the version of this tool')
 
 # "backup" command parser
 p1 = subparsers.add_parser('backup', help='Backup selected topics from the specified cluster')
@@ -400,5 +403,7 @@ if __name__ == "__main__":
 
         print('Done. Your next backup will start from the beginning of the topics.')
 
+    elif args.command == 'version':
+        print(f"Kafka Handy Backup v{VERSION}")
     else:
         parser.print_help()
