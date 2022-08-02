@@ -27,7 +27,7 @@ p1 = subparsers.add_parser('backup', help='Backup selected topics from the speci
 p1.add_argument('--topic', '-t', dest='topics', action='append', help='Topics to backup')
 p1.add_argument('--topics-regex', type=str, help='Topics to backup')
 p1.add_argument('--bootstrap-servers', type=str)
-p1.add_argument('--max-chunk-size', type=int, default=1000000, help='Maximum size of chunk (files) in bytes (default = 1Gb)')
+p1.add_argument('--max-chunk-size', type=int, default=1000000000, help='Maximum size of chunk (files) in bytes (default = 1Gb)')
 p1.add_argument('--directory', type=str, default='kafka-backup-data', help='Output directory/container (default="kafka-backup-data")')
 p1.add_argument('--continuous', action='store_true', help='Continuous backup mode')
 p1.add_argument('--point-in-time-interval', type=int, default=86400, help='Point in time interval (default: 24h)')
