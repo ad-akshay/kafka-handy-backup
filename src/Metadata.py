@@ -5,6 +5,7 @@ Class in charge of reading the metadata (consumer offset, topics details) from a
 from dataclasses import asdict
 from math import floor
 import time
+from TopicBackupConsumer import KAFKA_BACKUP_CONSUMER_GROUP
 from confluent_kafka import Consumer, TopicPartition
 from confluent_kafka.admin import AdminClient
 from utils import ConsumerDetails, ConsumerOffset, MetaData, PartitionDetails, TopicDetails, OFFSET_INVALID
@@ -21,7 +22,7 @@ def topics_details(bootstrap_servers: str) -> dict[str, TopicDetails]:
     """Retreive topics details (paritions, offsets, etc.)"""
     admin = AdminClient({'bootstrap.servers': bootstrap_servers})
     consumer = Consumer({
-        'group.id': 'kafka-backup',
+        'group.id': KAFKA_BACKUP_CONSUMER_GROUP,
         'bootstrap.servers': bootstrap_servers,
         'auto.offset.reset': 'smallest'
     })
