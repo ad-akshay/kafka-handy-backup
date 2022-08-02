@@ -7,7 +7,7 @@ import time
 from Encryptor import Encryptor
 import logging
 
-from universal_osc.ObjectStorageClient import ObjectStorageClient
+from obs_client import ObjectStorageClient
 
 logger = logging.getLogger(__name__)
 

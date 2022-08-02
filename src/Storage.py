@@ -11,8 +11,7 @@ from FileStream import FileStream
 from ReadableMessageStream import ReadableMessageStream
 from WritableMessageStream import WritableMessageStream
 from utils import MetaData, key_id
-from universal_osc.SwiftClient import SwiftClient
-from universal_osc.ObjectStorageClient import *
+from obs_client import *
 
 
 logger = logging.getLogger(__name__)

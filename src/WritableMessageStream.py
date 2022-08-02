@@ -4,7 +4,7 @@ from Encoder import Encoder
 from Encryptor import Encryptor
 from FileStream import FileStream
 from confluent_kafka import Message
-from universal_osc import ObjectStorageClient
+from obs_client import ObjectStorageClient
 from utils import key_id
 
 class WritableMessageStream:

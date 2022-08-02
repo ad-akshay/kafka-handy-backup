@@ -13,7 +13,7 @@ import cbor2
 from confluent_kafka import Message
 
 from utils import KafkaMessage
-from universal_osc import ObjectStorageClient
+from obs_client import ObjectStorageClient
 
 logger = logging.getLogger(__name__)
 
