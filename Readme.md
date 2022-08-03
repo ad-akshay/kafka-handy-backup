@@ -23,7 +23,7 @@ Various ways to go:
 - Clone this repo and run `python -u src/kafka-backup.py` script directly.
 - Use the docker image : `docker pull totalus/kafka-handy-backup` and `docker run -it --entrypoint //bin/bash totalus/kafka-handy-backup` (to get a shell in the container, then `python3 kafka-backup.py ...`).
 
-## Usage
+# Usage
 
 `python kafka-backup.py <command> [options]`
 
@@ -79,14 +79,14 @@ To encrypt the backed up data, specify an encryption key (must be 32 bytes long)
 By default, the backup data is saved on the local file system in the `kafka-backup-data` folder. The target directory can be changed with the `--directory` option.
 
 
-**Continuous mode**
+### Continuous mode
 
 By default, the backup command will first capture the current topics max offsets and then backup the messages up to this offset (even if new messages came in during the backup process). This ensures that the backup will not run indefinitely.
 
 In continuous mode however, the backup process will run indefinitely, backing up the messages as they come in and saving some restoration points at periodic intervals (configurable with `--point-in-time-interval`).
 
 
-**Using object storage**
+### Using object storage
 
 Currently only OpenStack Swift storage backend is supported (throught this [object storage client](https://github.com/Totalus/object-storage-client)).
 
