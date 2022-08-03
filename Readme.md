@@ -94,7 +94,7 @@ To use OpenStack Swift as storage backend :
 - Set the storage backend with the `--swift-url` option
 - Provide the [required](https://github.com/Totalus/object-storage-client#openstack-swift) credentials through environment variables.
 
-Note that the local file system will still be used to save data chunks before uploading them to the objects storage and removed from the file system. The name of the container where data will be stored is the same as the target directory on the local file system, that can be specified with `--directory`.
+Note that the local file system will still be used to save data chunks before uploading them to the objects storage and removed from the file system. The name of the container where data will be stored is the same as the target directory on the local file system, that can be specified with `--directory`. The container will be created if it does not exist.
 
 ### `backup-info` command
 
