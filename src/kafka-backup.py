@@ -50,7 +50,7 @@ p3.add_argument('--ignore-partitions', dest='original_partitions', action='store
 p3.add_argument('--ignore-errors', action='store_true', help='Ignore topics with errors')
 p3.add_argument('--ignore-offsets', action='store_true', help='Do not restore the consumer group offsets (default when --ignore-partition is used)')
 p3.add_argument('--dry-run', action='store_true', help='Do not actually perform the restoration. Only print the actions that would be performed.')
-p3.add_argument('--point-in-time', type=str, help="Manually select a restoration point (use the `backup-info` command to list available options")
+p3.add_argument('--restoration-point', type=str, help="Manually select a restoration point (use the `backup-info` command to list available options")
 p3.add_argument('--encryption-key', dest='encryption_keys', action='append', type=str, help="Key used for decrypting the data. This option can be used multiple times to specify more than one key if multiple keys were used for encryption.")
 p3.add_argument('--restore-offsets', action='store_true', help="Restore the consumer offsets")
 p3.add_argument('--swift-url', type=str, help='OpenStack Swift URL')
@@ -235,11 +235,11 @@ if __name__ == "__main__":
                         'error': 'Topic not found in backup'
                     })
 
-        restoration_point_metadata = storage.get_metadata(args.point_in_time)
+        restoration_point_metadata = storage.get_metadata(args.restoration_point)
         cluster_topic_details = Metadata.topics_details(BOOTSTRAP_SERVERS)
 
         if restoration_point_metadata is None:
-            print(f'ERROR: Could not find metadata for restoration point {args.point_in_time}')
+            print(f'ERROR: Could not find metadata for restoration point {args.restoration_point}')
             exit()
 
         print(f'Restoration point: {restoration_point_metadata.timestamp}')
