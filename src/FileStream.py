@@ -47,7 +47,10 @@ class FileStream:
             if self.mode == 'write':
                 logging.info(f'Uploading {self.filePath} to object storage')
                 start_time = time.time()
-                ok = self.client.upload_file(self.filePath, self.filePath)
+                ok = self.client.upload_file(
+                    localFilePath=self.filePath,
+                    object_name=self.filePath
+                    )
                 logging.debug(f'Uploading {self.filePath} ({round(self.size()/1024/1024)} Mb) completed in {round(time.time() - start_time, 2)} seconds')
                 if ok:
                     logging.debug(f'Deleting {self.filePath} from local file system')
