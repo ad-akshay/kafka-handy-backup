@@ -36,9 +36,8 @@ class Storage:
 
         if swift_url:
             self.object_storage_client = SwiftClient(swift_url)
-            if self.object_storage_client.container_info(self.base_path) is None: # Container does not exist
-                if not self.object_storage_client.container_create(self.base_path): # Can't create the container
-                    logger.error(f'ERROR: Could not create container {self.base_path} on storage backend')
+            if not self.object_storage_client.use_container(self.base_path, create=True):
+                logger.error(f'ERROR: Could not use or create container {self.base_path} on storage backend')
 
     def backup_metadata(self, metadata: MetaData):
         """Save the given metadata to a file (creates a restoration point)"""
