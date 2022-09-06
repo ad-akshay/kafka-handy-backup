@@ -59,7 +59,8 @@ class Storage:
             # Local file system
             metadata_path = self.base_path + '/metadata'
             metadata_files = [f for f in os.listdir(metadata_path) if os.path.isfile(os.path.join(metadata_path, f))]
-            metadata_files.sort(reverse=True) # Latest first
+        
+        metadata_files.sort(reverse=True) # Latest first
 
         if limit is not None and limit > 0:
             metadata_files = metadata_files[0:limit]
