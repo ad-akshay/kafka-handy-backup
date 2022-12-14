@@ -59,6 +59,8 @@ Specify the topics to backup by their name:
 ./kafka-backup.py backup --topic my-topic-1 --topic my-topic-2
 ```
 
+By default, the backup data is saved on the local file system in the `kafka-backup-data` folder. The target directory can be changed with the `--directory` option.
+
 Specify the topics to backup with a regex pattern:
 
 ```bash
@@ -76,15 +78,11 @@ To encrypt the backed up data, specify an encryption key (must be 32 bytes long)
 ./kafka-backup.py backup --topic my-topic-1 --encryption-key 0123456789abcdefghijklmnopqrstuv
 ```
 
-By default, the backup data is saved on the local file system in the `kafka-backup-data` folder. The target directory can be changed with the `--directory` option.
-
-
 ### Continuous mode
 
 By default, the backup command will first capture the current topics max offsets and then backup the messages up to this offset (even if new messages came in during the backup process). This ensures that the backup will not run indefinitely.
 
-In continuous mode however, the backup process will run indefinitely, backing up the messages as they come in and saving some restoration points at periodic intervals (configurable with `--point-in-time-interval`).
-
+In continuous mode however (`--continuous`), the backup process will run indefinitely, backing up the messages as they come in and saving some restoration points at periodic intervals (configurable with `--point-in-time-interval`).
 
 ### Using object storage
 
@@ -127,11 +125,11 @@ The restore command restores selected topics (that were backed up) to a target c
 export KAFKA_BOOTSTRAP_SERVERS=my-kafka-cluster:9092
 
 # Restore topic-1 to the cluster
-./kafka-backup.py --topic topic-1 --directory my-backup-directory
+./kafka-backup.py restore --topic topic-1 --directory my-backup-directory
 
 # You can also restore a topic to a different topic name with the --topic option.
 # Ex: Restore the messages of topic-1 into topic-1-restored
-./kafka-backup.py --topic topic-1/topic-1-restored
+./kafka-backup.py restore --topic topic-1/topic-1-restored
 ```
 
 By default, the latest restoration point is used, but you pass the timestamp of the restoration point to use to  the `--restoration-point` option to use an older restoration point.
