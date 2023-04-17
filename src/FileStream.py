@@ -1,5 +1,6 @@
 """
-Stream for writing data to the local files system
+File like object that reads and writes to the local file system, but also handles transparently 
+the upload and download of the opened and closed files if an object storage backend is configured.
 """
 import os
 from struct import *
@@ -32,10 +33,10 @@ class FileStream:
             bytes = self.encryptor.decrypt(bytes)
         return bytes
 
-    def size(self):
+    def size(self) -> int:
         return self._size
 
-    def at_end(self):
+    def at_end(self) -> bool:
         return self.file.tell() == self.size()
 
     def close(self):
