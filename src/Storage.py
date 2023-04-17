@@ -35,7 +35,9 @@ class Storage:
         self.decryption_keys = { key_id(x):x for x in decryption_keys }
 
         self.container_name = base_path.split('/')[0]
-        self.object_prefix = '/'.join(base_path.split('/')[1:]) + '/'
+        self.object_prefix = '/'.join(base_path.split('/')[1:])
+        if len(self.object_prefix) > 0:
+            self.object_prefix += '/'
         # print(f'Configuring storage (base_path="{base_path}", max_chunk_size={max_chunk_size} container_name={self.container_name} object_prefix={self.object_prefix})')
 
         if swift_region:
@@ -60,7 +62,7 @@ class Storage:
         """Returns the list of available restoration points"""
         if self.object_storage_client:
             # Object storage
-            objects = self.object_storage_client.object_list(container_name=self.container_name, prefix=f'{self.object_prefix}metadata/')
+            objects = self.object_storage_client.object_list(container_name=self.container_name, prefix=f'{self.object_prefix}metadata/', delimiter='/')
             metadata_files = [o.name.removeprefix(self.object_prefix).split('/')[1] for o in objects]
         else:
             # Local file system
