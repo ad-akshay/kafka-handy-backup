@@ -34,10 +34,9 @@ class Storage:
         self.encryption_key = encryption_key
         self.decryption_keys = { key_id(x):x for x in decryption_keys }
 
-        if swift_url:
-            self.object_storage_client = SwiftClient(swift_url)
-            if not self.object_storage_client.use_container(self.base_path, create=True):
-                logger.error(f'ERROR: Could not use or create container {self.base_path} on storage backend')
+        self.container_name = base_path.split('/')[0]
+        self.object_prefix = '/'.join(base_path.split('/')[1:]) + '/'
+        # print(f'Configuring storage (base_path="{base_path}", max_chunk_size={max_chunk_size} container_name={self.container_name} object_prefix={self.object_prefix})')
 
     def backup_metadata(self, metadata: MetaData):
         """Save the given metadata to a file (creates a restoration point)"""
@@ -52,8 +51,8 @@ class Storage:
         """Returns the list of available restoration points"""
         if self.object_storage_client:
             # Object storage
-            objects = self.object_storage_client.object_list(container_name=self.base_path, prefix='metadata/')
-            metadata_files = [o.name.split('/')[1] for o in objects]
+            objects = self.object_storage_client.object_list(container_name=self.container_name, prefix=f'{self.object_prefix}metadata/')
+            metadata_files = [o.name.removeprefix(self.object_prefix).split('/')[1] for o in objects]
         else:
             # Local file system
             metadata_path = self.base_path + '/metadata'
@@ -91,8 +90,8 @@ class Storage:
         """Return a list of available (backed up) topics"""
 
         if self.object_storage_client:
-            objects = self.object_storage_client.object_list(container_name=self.base_path, prefix='topics/', delimiter='/')
-            available_topics = [ t.subdir.split('/')[1] for t in objects if (isinstance(t, SubdirInfo)) ]
+            objects = self.object_storage_client.object_list(container_name=self.container_name, prefix=f'{self.object_prefix}topics/', delimiter='/')
+            available_topics = [ t.subdir.removeprefix(self.object_prefix).split('/')[1] for t in objects if (isinstance(t, SubdirInfo)) ]
             return available_topics
         else:
             # Local file system
@@ -107,7 +106,7 @@ class Storage:
         """Return the list of backup files/objects that contain data for a topic partition"""
 
         if self.object_storage_client:
-            objects = self.object_storage_client.object_list(container_name=self.base_path, prefix=f'topics/{topic}/{partition}')
+            objects = self.object_storage_client.object_list(container_name=self.base_path, prefix=f'{self.object_prefix}topics/{topic}/{partition}')
             chunks = [ f"{self.base_path}/{o.name}" for o in objects ]
             chunks.sort()
             return chunks
