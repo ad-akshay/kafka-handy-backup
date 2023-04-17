@@ -1,3 +1,6 @@
+"""
+Encoder class that handles the compression and encoding of individual Kafka messages (KafkaMessage -> ByteArray and ByteArray -> KafkaMessage)
+"""
 import cbor2, bz2
 from utils import KafkaMessage
 
@@ -6,12 +9,11 @@ AVAILABLE_COMPRESSORS = ['bz2']
 
 class Encoder:
 
-    def __init__(self, encoding = 'cbor', compression = None):
+    def __init__(self, encoding: str = 'cbor', compression: str = None):
         self.encoder = encoding
         self.compression = compression
 
-    def encode(self, msg):
-        """Encode the message into a byte array"""
+    def _encode(self, msg: KafkaMessage) -> bytes:
         if self.encoder == 'cbor':
             # Create an object with all the message details we need to save
             obj_msg = {
@@ -25,7 +27,7 @@ class Encoder:
 
             return cbor2.dumps(obj_msg)
 
-    def decode(self, bytes) -> KafkaMessage:
+    def _decode(self, bytes: bytes) -> KafkaMessage:
         if self.encoder == 'cbor':
             obj_msg = cbor2.loads(bytes)
 
@@ -40,22 +42,23 @@ class Encoder:
             )
 
 
-    def compress(self, bytes) -> bytes:
+    def _compress(self, bytes: bytes) -> bytes:
         """Compress the given byte array"""
         if self.compression == 'bz2':
             return bz2.compress(bytes)
         else:
             return bytes
 
-    def decompress(self, bytes) -> bytes:
+    def _decompress(self, bytes: bytes) -> bytes:
         if self.compression == 'bz2':
             return bz2.decompress(bytes)
         else:
             return bytes
 
-    def encode_message(self, msg):
+    def encode_message(self, msg: KafkaMessage) -> bytes:
         """Encodes a message into an optionally compressed and encrypted byte array"""
-        return self.compress(self.encode(msg))
+        return self._compress(self._encode(msg))
 
-    def decode_message(self, bytes):
-        return self.decode(self.decompress(bytes))
+    def decode_message(self, bytes: bytes) -> KafkaMessage:
+        """Decode a byte array to a kafka message"""
+        return self._decode(self._decompress(bytes))
