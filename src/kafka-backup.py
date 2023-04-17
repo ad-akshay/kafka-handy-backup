@@ -261,7 +261,7 @@ if __name__ == "__main__":
 
             # Check if destination topic exist
             if d is None:
-                t['error'] = f'Destination topic "{t["destination"]}" does not exist on the cluster'
+                t['error'] = f'Destination topic "{t["destination"]}" does not exist in kafka'
                 continue
 
             # Check if topics is empty
