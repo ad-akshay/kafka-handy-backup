@@ -10,7 +10,7 @@ Handy Kafka Backup is a CLI tool for easily backing up selected kafka topics to 
 - Select which topics to backup
 - Incremental backup
 - Run as a job or in continuous backup mode
-- Multiple storage backends: local file system and object storage (OpenStack Swift)
+- Multiple storage backends: local file system and object storage (OpenStack Swift, AWS S3)
 - Automatically backup and optionally restore consumer offsets
 - Optional data encryption (AES256)
 - Optionnal data compression
@@ -80,16 +80,20 @@ To encrypt the backed up data, specify an encryption key (must be 32 bytes long)
 
 ### Continuous mode
 
-By default, the backup command will first capture the current topics max offsets and then backup the messages up to this offset (even if new messages came in during the backup process). This ensures that the backup will not run indefinitely.
+By default, the backup command will first capture the current topics max offsets and then backup the messages up to this offset (even if new messages were published during the backup process). This ensures that the backup will not run indefinitely.
 
 In continuous mode however (`--continuous`), the backup process will run indefinitely, backing up the messages as they come in and saving some restoration points at periodic intervals (configurable with `--point-in-time-interval`).
 
 ### Using object storage
 
-Currently only OpenStack Swift storage backend is supported (throught this [object storage client](https://github.com/Totalus/object-storage-client)).
+The following object storage backend are supported (throught this [Universal Object Storage Client](https://github.com/Totalus/object-storage-client)): AWS S3, OpenStack Swift.
 
 To use OpenStack Swift as storage backend :
-- Set the storage backend with the `--swift-url` option
+- Set the storage backend with the `--swift-region` option
+- Provide the [required](https://github.com/Totalus/object-storage-client#openstack-swift) credentials through environment variables.
+
+To use AWS S3 as storage backend :
+- Set the storage backend with the `--s3-location` option
 - Provide the [required](https://github.com/Totalus/object-storage-client#openstack-swift) credentials through environment variables.
 
 Note that the local file system will still be used to save data chunks before uploading them to the objects storage and removed from the file system. The name of the container where data will be stored is the same as the target directory on the local file system, that can be specified with `--directory`. The container will be created if it does not exist.
@@ -174,7 +178,7 @@ Requirements for restoring:
 | --ignore-errors          | restore                      | Ignore topics with errors                                                                                                        |
 | --dry-run                | restore                      | Do not actually perform the restoration. Only print the actions that would be performed.                                         |
 | --restoration-point      | restore                      | Manually select a restoration point (use the `backup-info` command to list available options                                     |
-| --restore-offsets        | restore                      | Restore the consumer offsets of the restored topics                                                                              |
+| --restore-offsets        | restore                      | Restore the consumer offsets of the restored topics. Does not apply if `--ignore-partitions` is set.                                                                              |
 | --limit                  | backup-info                  | Max number of lines to print                                                                                                     |
 | --confirm                | reset-cursor                 | Reset the committed consumer offset of the kafka backup consumer so that new backups will start from the beginning of each topic |
 | --details                | list-topics                  | Also print partition details for each topic                                                                                      |
