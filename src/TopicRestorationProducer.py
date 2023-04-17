@@ -11,6 +11,9 @@ import Metadata
 from utils import ConsumerDetails, setCommittedOffset
 
 class TopicRestorationProducer():
+    """
+    Kafka producer that handles the restoration of a single topic-partition
+    """
 
     _exit_signal = False
 

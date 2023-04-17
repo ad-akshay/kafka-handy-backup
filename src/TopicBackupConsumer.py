@@ -13,7 +13,9 @@ logger = logging.getLogger(__name__)
 KAFKA_BACKUP_CONSUMER_GROUP = 'kafka-backup-topic' # The consumer group used to read the topics
 
 class TopicBackupConsumer:
-    """Class used to backup all the partitions of a specified topic"""
+    """
+    Kafka consumer that handles the backup of all the partitions of a topic
+    """
 
     _exit_task = False
     consumer = None

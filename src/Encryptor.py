@@ -1,12 +1,14 @@
-#
-#   Responsible for the encryption/decryption of data
-#
+
 import os
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 AVAILABLE_ENCRYPTIONS = ['AES256']
 
+
 class Encryptor:
+    """
+    Class handling encryption and decryption of data
+    """
 
     def __init__(self, key: bytes, iv: bytes = None):
         self.encryption = 'AES256'
@@ -15,8 +17,8 @@ class Encryptor:
         self.encryptor = self.cipher.encryptor()
         self.decryptor = self.cipher.decryptor()
 
-    def encrypt(self, data):
+    def encrypt(self, data: bytes) -> bytes:
         return self.encryptor.update(data)
 
-    def decrypt(self, data):
+    def decrypt(self, data: bytes) -> bytes:
         return self.decryptor.update(data)
