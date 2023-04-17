@@ -50,7 +50,8 @@ class FileStream:
                 start_time = time.time()
                 ok = self.client.upload_file(
                     localFilePath=self.filePath,
-                    object_name=self.filePath
+                    object_name=self.filePath,
+                    container_name=''
                     )
                 logging.debug(f'Uploading {self.filePath} ({round(self.size()/1024/1024)} Mb) completed in {round(time.time() - start_time, 2)} seconds')
                 if ok:
@@ -82,7 +83,7 @@ class FileStream:
                 # Object storage is configured, we need to download the file first
                 os.makedirs(os.path.dirname(self.filePath), exist_ok=True) # Make sure the target file system directory exist
                 logger.debug(f'Downloading chunk {self.filePath}')
-                ok = self.client.download_file(self.filePath, self.filePath)
+                ok = self.client.download_file(self.filePath, self.filePath, container_name='')
                 if not ok:
                     logger.error(f'ERROR downloading chunk {self.filePath}')
 
