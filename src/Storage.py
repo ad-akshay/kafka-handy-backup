@@ -12,6 +12,7 @@ from ReadableMessageStream import ReadableMessageStream
 from WritableMessageStream import WritableMessageStream
 from utils import MetaData, key_id
 from obs_client import *
+from obs_client import S3Client
 
 
 logger = logging.getLogger(__name__)
@@ -26,8 +27,7 @@ class Storage:
 
     object_storage_client: ObjectStorageClient = None
 
-    def __init__(self, base_path: str, max_chunk_size: int, encoder: Encoder, encryption_key: str, decryption_keys: list[bytes] = [], swift_url: str = None):
-        # print(f'Configuring storage (base_path="{base_path}", max_chunk_size={max_chunk_size})')
+    def __init__(self, base_path: str, max_chunk_size: int, encoder: Encoder, encryption_key: str, decryption_keys: list[bytes] = [], swift_region: str = None, s3_region: str = None):
         self.base_path = base_path
         self.max_chunk_size = max_chunk_size
         self.encoder = encoder
@@ -37,6 +37,15 @@ class Storage:
         self.container_name = base_path.split('/')[0]
         self.object_prefix = '/'.join(base_path.split('/')[1:]) + '/'
         # print(f'Configuring storage (base_path="{base_path}", max_chunk_size={max_chunk_size} container_name={self.container_name} object_prefix={self.object_prefix})')
+
+        if swift_region:
+            self.object_storage_client = SwiftClient(swift_region)
+            if not self.object_storage_client.use_container(self.container_name, create=True):
+                logger.error(f'ERROR: Could not use or create container {self.container_name} on storage backend')
+        elif s3_region:
+            self.object_storage_client = S3Client(s3_region)
+            if not self.object_storage_client.use_container(self.container_name, create=True):
+                logger.error(f'ERROR: Could not use or create container {self.container_name} on storage backend')
 
     def backup_metadata(self, metadata: MetaData):
         """Save the given metadata to a file (creates a restoration point)"""

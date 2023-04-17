@@ -33,7 +33,9 @@ p1.add_argument('--continuous', action='store_true', help='Continuous backup mod
 p1.add_argument('--point-in-time-interval', type=int, default=86400, help='Point in time interval (default: 24h)')
 p1.add_argument('--compression', type=str, choices=AVAILABLE_COMPRESSORS, help='Specify compression algorithm for compressing messages')
 p1.add_argument('--encryption-key', type=str, help='256 bits encryption key')
-p1.add_argument('--swift-url', type=str, help='OpenStack Swift URL')
+g = p1.add_mutually_exclusive_group()
+g.add_argument('--swift-region', type=str, help='OpenStack Swift Region')
+g.add_argument('--s3-region', type=str, help='AWS S3 region')
 
 # "list-topics" command parser
 p2 = subparsers.add_parser('list-topics', help='List topics in the cluster')
@@ -43,7 +45,7 @@ p2.add_argument('--details', action='store_true', help='Show partition details')
 # "restore" command parser
 p3 = subparsers.add_parser('restore', help='Restore backed up topics to the cluster')
 p3.add_argument('--bootstrap-servers', type=str)
-p3.add_argument('--directory', type=str, default='kafka-backup-data', help='Backup directory/container (default="kafka-backup-data")')
+p3.add_argument('--directory', type=str, default='kafka-backup-data', help='Backup directory / Container name (default="kafka-backup-data")')
 p3.add_argument('--topic', '-t', dest='topics', action='append', help='Topics to backup')
 p3.add_argument('--topics-regex', type=str, help='Topics to restore')
 p3.add_argument('--ignore-partitions', dest='original_partitions', action='store_false', help='Ignore the original message partitions when publishing')
@@ -53,14 +55,18 @@ p3.add_argument('--dry-run', action='store_true', help='Do not actually perform 
 p3.add_argument('--restoration-point', type=str, help="Manually select a restoration point (use the `backup-info` command to list available options")
 p3.add_argument('--encryption-key', dest='encryption_keys', action='append', type=str, help="Key used for decrypting the data. This option can be used multiple times to specify more than one key if multiple keys were used for encryption.")
 p3.add_argument('--restore-offsets', action='store_true', help="Restore the consumer offsets")
-p3.add_argument('--swift-url', type=str, help='OpenStack Swift URL')
+g = p3.add_mutually_exclusive_group()
+g.add_argument('--swift-region', type=str, help='OpenStack Swift Region')
+g.add_argument('--s3-region', type=str, help='AWS S3 region')
 
 
 # "backup-info" command parser
 p4 = subparsers.add_parser('backup-info', help='Print information on the backed up info')
 p4.add_argument('--limit', type=int, default=10, help='Max number of lines to print')
 p4.add_argument('--directory', type=str, default='kafka-backup-data', help='Backup directory/container (default="kafka-backup-data")')
-p4.add_argument('--swift-url', type=str, help='OpenStack Swift URL')
+g = p4.add_mutually_exclusive_group()
+g.add_argument('--swift-region', type=str, help='OpenStack Swift Region')
+g.add_argument('--s3-region', type=str, help='AWS S3 region')
 
 # "reset-cursor"
 p5 = subparsers.add_parser('reset-cursor', help='Reset the committed consumer offset of the kafka backup consumer so that new backups will start from the beginning of each topic')
@@ -137,7 +143,8 @@ if __name__ == "__main__":
             max_chunk_size=args.max_chunk_size,
             encoder=encoder,
             encryption_key=encryption_key,
-            swift_url=args.swift_url
+            swift_region=args.swift_region,
+            s3_region=args.s3_region
         )
 
         consumers = []
@@ -207,7 +214,8 @@ if __name__ == "__main__":
             encoder=Encoder(),
             encryption_key=None,
             decryption_keys=encryption_keys,
-            swift_url=args.swift_url
+            swift_region=args.swift_region,
+            s3_region=args.s3_region
         )
 
         available_topics = storage.available_topics()
@@ -357,7 +365,8 @@ if __name__ == "__main__":
             max_chunk_size=100, # Whatever value, we're not writing anyway
             encoder=Encoder(),
             encryption_key=None,
-            swift_url=args.swift_url
+            swift_region=args.swift_region,
+            s3_region=args.s3_region
         )
 
         print('\nAvailable restoration points:')
