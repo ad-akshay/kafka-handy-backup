@@ -119,12 +119,12 @@ class Storage:
         if self.object_storage_client:
             objects = self.object_storage_client.object_list(container_name=self.base_path, prefix=f'{self.object_prefix}topics/{topic}/{partition}')
             chunks = [ f"{self.base_path}/{o.name}" for o in objects ]
-            chunks.sort()
+            chunks.sort(key=lambda x: int(x.split('/')[-1].split('_')[0])) # Sort in order of offset
             return chunks
         else:
             # Local file system
             files = os.listdir(f'{self.base_path}/topics/{topic}/{partition}')
-            files.sort()
+            files.sort(key=lambda x: int(x.split('_')[0])) # Sort in order of offset
             return [f'{self.base_path}/topics/{topic}/{partition}/{f}' for f in files]
 
     def get_chunk(self, topic, partition, offset):
