@@ -102,7 +102,7 @@ Note that the local file system will still be used to save data chunks before up
 
 When backing up, restoration points are created. The restoration points contain information about the state of the topics and consumer groups in the cluster at specific moments in time. That allows to restore the topics exactly as they were at that point in time. The `backup-info` command shows the available restoration points and the backed up topics.
 
-Note that the `--directory` and `--swift-url` options must be the same as the ones used when running the `backup` command as it indicates where the backup resides.
+Note that the `--directory` and `--swift-region`/`--s3-region` options must be the same as the ones used when running the `backup` command as it indicates where the backup resides.
 
 ```bash
 # Example for a backup on the file system
@@ -154,7 +154,7 @@ If you changed the encryption key of the backup along the way, you will have old
 
 Requirements for restoring:
 - Destination topics must exist on the cluster.
-- Destination topics must have a number of partition that is equal or higher than the backed up source topic.
+- Destination topics must have a number of partition that is equal or higher than the backed up source topic, unless `--ignore-partitions` option is set.
 - Destination topics must be empty.
 - No producer should be publishing to the destination topic during restoration.
 - No consumer should be consuming from the destination topic during restoration if the `--restore-offsets` option is used.
@@ -168,17 +168,18 @@ Requirements for restoring:
 | --continuous             | backup                       | Continuous backup mode                                                                                                           |
 | --topic, -t              | backup, restore              | Name of the topic to backup or restore                                                                                           |
 | --topics-regex           | backup, restore              | Regex pattern to select the topic(s) to backup or restore                                                                        |
-| --max-chunk-size         | backup                       | Maximum size of backup data chunks (files) in bytes (default = 1Gb)                                                              |
+| --max-chunk-size         | backup                       | Maximum size of backup data chunks (files) in bytes (default = 100 Mb)                                                           |
 | --point-in-time-interval | backup                       | Use with `--continuous`. Defines the interval of time (in seconds) between two restoration point (default: 24h)                  |
 | --compression            | backup                       | Specify compression algorithm for compressing messages (run the `backup` command with `--help` for available options)            |
 | --directory              | backup, restore, backup-info | Output directory/container name (default="kafka-backup-data")                                                                    |
-| --encryption-key         | backup, restore              | 256 bits encryption key                                                                                                          |
-| --swift-url              | backup, restore, backup-info | OpenStack Swift URL                                                                                                              |
+| --encryption-key         | backup, restore              | 256 bits encryption key (must be 32 characters)                                                                                  |
+| --swift-region           | backup, restore, backup-info | OpenStack Swift Region                                                                                                           |
+| --s3-region              | backup, restore, backup-info | AWS S3 Region                                                                                                                    |
 | --ignore-partitions      | restore                      | Ignore the original message partitions when restoring the messages                                                               |
 | --ignore-errors          | restore                      | Ignore topics with errors                                                                                                        |
 | --dry-run                | restore                      | Do not actually perform the restoration. Only print the actions that would be performed.                                         |
-| --restoration-point      | restore                      | Manually select a restoration point (use the `backup-info` command to list available options                                     |
-| --restore-offsets        | restore                      | Restore the consumer offsets of the restored topics. Does not apply if `--ignore-partitions` is set.                                                                              |
+| --restoration-point      | restore                      | Manually select a restoration point (use the `backup-info` command to list available options)                                    |
+| --restore-offsets        | restore                      | Restore the consumer offsets of the restored topics. Does not apply if `--ignore-partitions` is set.                             |                                                 |
 | --limit                  | backup-info                  | Max number of lines to print                                                                                                     |
 | --confirm                | reset-cursor                 | Reset the committed consumer offset of the kafka backup consumer so that new backups will start from the beginning of each topic |
 | --details                | list-topics                  | Also print partition details for each topic                                                                                      |
