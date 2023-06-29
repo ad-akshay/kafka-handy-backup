@@ -16,8 +16,9 @@ class TopicRestorationProducer():
     """
 
     _exit_signal = False
+    config = {}
 
-    def __init__(self, src_topic: str, dst_topic: str, partition: int, original_partitions: bool, minOffset:int, maxOffset:int, storage: Storage, bootstrap_server: str, restore_consumer_offset: bool, consumer_offsets: Dict[str, ConsumerDetails]):
+    def __init__(self, src_topic: str, dst_topic: str, partition: int, original_partitions: bool, minOffset:int, maxOffset:int, storage: Storage, bootstrap_server: str, restore_consumer_offset: bool, consumer_offsets: Dict[str, ConsumerDetails], config: Dict[str, any]):
         """
             src_topic
                 Source topic name
@@ -50,6 +51,7 @@ class TopicRestorationProducer():
         self.bootstrap_server = bootstrap_server
         self.restore_consumer_offsets = restore_consumer_offset
         self.consumer_offsets = consumer_offsets
+        self.config = config
 
     def start(self):
         print(f'Starting restoration for {self.src_topic}/{self.partition}')
@@ -58,12 +60,12 @@ class TopicRestorationProducer():
         if not self.msg_stream.seek(self.offset_start):
             # print(f'ERROR: Could not load chunk for topic {self.src_topic}/{self.partition} offset {self.offset_start}.')
             return
-
-        # Create a producer
-        producer = Producer({
+        self.config.update({
             'bootstrap.servers': self.bootstrap_server,
             'client.id': 'kafka-backup'
         })
+        # Create a producer
+        producer = Producer(self.config)
 
         next_offset = self.offset_start # Which offset to restore next
         for msg in self.msg_stream:

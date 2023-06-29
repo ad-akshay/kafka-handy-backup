@@ -88,6 +88,11 @@ p3.add_argument('--encryption-key', dest='encryption_keys', action='append', typ
                 help="Key used for decrypting the data. This option can be used multiple times to specify more than one key if multiple keys were used for encryption.")
 p3.add_argument('--restore-offsets', action='store_true',
                 help="Restore the consumer offsets")
+p3.add_argument('--sasl-mode', action='store_true', help='Broker SASL Mode')
+p3.add_argument('--sasl-mechanism', type=str, help='SASL Mode mechanism')
+p3.add_argument('--sasl-username', type=str, help='SASL Mode username')
+p3.add_argument('--sasl-password', type=str, help='SASL Mode password')
+p3.add_argument('--security-protocol', type=str, help='Security Mode')
 g = p3.add_mutually_exclusive_group()
 g.add_argument('--swift-region', type=str, help='OpenStack Swift Region')
 g.add_argument('--s3-region', type=str, help='AWS S3 region')
@@ -108,6 +113,11 @@ g.add_argument('--s3-region', type=str, help='AWS S3 region')
 p5 = subparsers.add_parser(
     'reset-cursor', help='Reset the committed consumer offset of the kafka backup consumer so that new backups will start from the beginning of each topic')
 p5.add_argument('--bootstrap-servers', type=str)
+p5.add_argument('--sasl-mode', action='store_true', help='Broker SASL Mode')
+p5.add_argument('--sasl-mechanism', type=str, help='SASL Mode mechanism')
+p5.add_argument('--sasl-username', type=str, help='SASL Mode username')
+p5.add_argument('--sasl-password', type=str, help='SASL Mode password')
+p5.add_argument('--security-protocol', type=str, help='Security Mode')
 p5.add_argument('--confirm', action='store_true',
                 help='Set to cctually execute the command')
 # p5.add_argument('--topics-regex', type=str, help='Topics to reset cursor')
@@ -427,7 +437,8 @@ if __name__ == "__main__":
                     storage=storage,
                     bootstrap_server=BOOTSTRAP_SERVERS,
                     restore_consumer_offset=args.restore_offsets,
-                    consumer_offsets=restoration_point_metadata.consumers
+                    consumer_offsets=restoration_point_metadata.consumers,
+                    config=broker_config
                 ))
 
         # Start all the producers in different threads, then wait for them to finish
@@ -518,10 +529,34 @@ if __name__ == "__main__":
             print(f'- {t}')
 
     elif args.command == 'reset-cursor':
+        broker_config={}
+        if args.sasl_mode:
+            if not args.security_protocol:
+                print('Add security-protocol')
+                exit()
+            if not args.sasl_mechanism:
+                print('Add sasl-mechanism')
+                exit()
+            if not args.sasl_username:
+                print('Add sasl-username')
+                exit()
+            if not args.sasl_password:
+                print('Add sasl-password')
+                exit()
+
+            else:
+                broker_config.update(
+                    {
+                        'security.protocol': args.security_protocol,
+                        'sasl.mechanism': args.sasl_mechanism,
+                        'sasl.username': args.sasl_username,
+                        'sasl.password': args.sasl_password
+                    }
+                )
 
         # topic_names = storage.list_available_topics()
         group = KAFKA_BACKUP_CONSUMER_GROUP  # The group used by the TopicBackupConsumer
-        meta = Metadata.consumer_details(BOOTSTRAP_SERVERS)
+        meta = Metadata.consumer_details(BOOTSTRAP_SERVERS, broker_config)
         cd = meta.get(group)
 
         if cd is None:
