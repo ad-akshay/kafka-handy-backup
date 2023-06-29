@@ -10,7 +10,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-KAFKA_BACKUP_CONSUMER_GROUP = 'kafka-backup-topic' # The consumer group used to read the topics
+# The consumer group used to read the topics
+KAFKA_BACKUP_CONSUMER_GROUP = 'kafka-backup-topic'
+
 
 class TopicBackupConsumer:
     """
@@ -22,38 +24,45 @@ class TopicBackupConsumer:
     assigned_partitions = -1
     completed_partitions = 0
     continuous = False
+    config = {}
 
-    def __init__(self, storage: Storage, bootstrap_servers: str, topic: str, stop_offsets: dict[int, int], continuous=False):
+    def __init__(self, storage: Storage, bootstrap_servers: str, topic: str, stop_offsets: dict[int, int], config: dict[str, any], continuous=False):
         self.continuous = continuous
         self.storage = storage
         self.bootstrap_servers = bootstrap_servers
         self.topic = topic
         self.stop_offsets = stop_offsets
         self.streams: dict[int, WritableMessageStream] = {}
-
+        self.config = config
 
     def _get_stream(self, partition: int) -> WritableMessageStream:
         if partition not in self.streams:
-            self.streams[partition] = self.storage.get_writable_msg_stream(self.topic, partition)
+            self.streams[partition] = self.storage.get_writable_msg_stream(
+                self.topic, partition)
         return self.streams[partition]
 
     # Consumer callbacks
 
     def on_assign(self, consumer, partitions):
-        if self.assigned_partitions == -1: self.assigned_partitions = 0
+        if self.assigned_partitions == -1:
+            self.assigned_partitions = 0
         self.assigned_partitions = self.assigned_partitions + len(partitions)
-        partitions = consumer.committed(partitions) # Get the real consumer offsets
-        logger.debug(f'Partitions {",".join([str(p.partition) for p in partitions])} of topic {partitions[0].topic} assigned')
+        # Get the real consumer offsets
+        partitions = consumer.committed(partitions)
+        logger.debug(
+            f'Partitions {",".join([str(p.partition) for p in partitions])} of topic {partitions[0].topic} assigned')
 
     def on_revoke(self, consumer, partitions):
         self.assigned_partitions = self.assigned_partitions - len(partitions)
         self.completed_partitions = self.completed_partitions - len(partitions)
-        logger.debug(f'Partitions {",".join([str(p.partition) for p in partitions])} of topic {partitions[0].topic} revoked')
+        logger.debug(
+            f'Partitions {",".join([str(p.partition) for p in partitions])} of topic {partitions[0].topic} revoked')
 
     def on_lost(self, consumer, partitions):
         self.assigned_partitions = self.assigned_partitions - len(partitions)
         self.completed_partitions = self.completed_partitions - len(partitions)
-        logger.debug(f'Partitions {",".join([str(p.partition) for p in partitions])} for topic {partitions[0].topic} lost')
+        logger.debug(
+            f'Partitions {",".join([str(p.partition) for p in partitions])} for topic {partitions[0].topic} lost')
 
     # Tasks control
 
@@ -67,27 +76,30 @@ class TopicBackupConsumer:
         if continuous is not None:
             self.continuous = continuous
 
-        self.consumer = Consumer({
-            'group.id': KAFKA_BACKUP_CONSUMER_GROUP,
-            'bootstrap.servers': self.bootstrap_servers,
-            'auto.offset.reset': 'smallest', # Which offset to start if there are not committed offset
-            'enable.auto.commit': False,
-            'enable.auto.offset.store': False
-        })
+        self.config.update({'group.id': KAFKA_BACKUP_CONSUMER_GROUP,
+                            'bootstrap.servers': self.bootstrap_servers,
+                            # Which offset to start if there are not committed offset
+                            'auto.offset.reset': 'smallest',
+                            'enable.auto.commit': False,
+                            'enable.auto.offset.store': False})
+
+        self.consumer = Consumer(self.config)
 
         logging.info(f'Creating consumer for topic {self.topic}')
-        self.consumer.subscribe([self.topic], on_assign=self.on_assign, on_revoke=self.on_revoke, on_lost=self.on_lost)
+        self.consumer.subscribe([self.topic], on_assign=self.on_assign,
+                                on_revoke=self.on_revoke, on_lost=self.on_lost)
 
         while True:
-            messages = self.consumer.consume(timeout=5) # Get messages in batch
+            messages = self.consumer.consume(
+                timeout=5)  # Get messages in batch
 
             if self._exit_task:
                 break
 
-            if len(messages) == 0: # No new messages
+            if len(messages) == 0:  # No new messages
                 if not self.continuous and self.is_backup_completed():
                     logging.info(f'Backup complete for topic {self.topic}')
-                    break # Exit the loop
+                    break  # Exit the loop
 
             for m in messages:
                 if m.error():
@@ -100,16 +112,20 @@ class TopicBackupConsumer:
                         # print(f'maxOffset={maxOffset} m.offset={m.offset()}')
                         if m.offset() == (maxOffset - 1):
                             # We reached the stop offset for this partition
-                            self.consumer.pause([TopicPartition(m.topic(), m.partition())]) # Stop consuming from this partition
-                            logging.info(f'Finished backing up {m.topic()}/{m.partition()}, last_offset={m.offset()}')
+                            # Stop consuming from this partition
+                            self.consumer.pause(
+                                [TopicPartition(m.topic(), m.partition())])
+                            logging.info(
+                                f'Finished backing up {m.topic()}/{m.partition()}, last_offset={m.offset()}')
                         elif m.offset() > (maxOffset - 1):
                             # print(f'Ignoring {m.topic()}/{m.partition()}:{m.offset()}')
-                            continue # Ignore messages in the batch that are above the max offset
+                            continue  # Ignore messages in the batch that are above the max offset
 
                     self._get_stream(m.partition()).write_message(m)
-                    self.consumer.store_offsets(message=m) # Will be commit later
+                    self.consumer.store_offsets(
+                        message=m)  # Will be commit later
 
-            self.consumer.commit() # Commit stored offsets
+            self.consumer.commit()  # Commit stored offsets
 
         # Close all remaining streams
         for s in self.streams.values():
@@ -123,10 +139,9 @@ class TopicBackupConsumer:
         # matches the specified stop offset.
         for partition_id in self.stop_offsets:
             maxOffset = self.stop_offsets[partition_id]
-            partition = self.consumer.committed([TopicPartition(self.topic, partition_id)])
+            partition = self.consumer.committed(
+                [TopicPartition(self.topic, partition_id)])
             # print(f'{self.topic}/{partition_id} : committed={partition[0].offset} max={maxOffset}')
             if maxOffset != 0 and maxOffset > partition[0].offset:
                 return False
         return True
-
-

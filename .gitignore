@@ -3,3 +3,4 @@ __pycache__
 backup/
 kafka-backup-data/
 backup-tests-data/
+.DS_Store
