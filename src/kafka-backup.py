@@ -156,27 +156,27 @@ if __name__ == "__main__":
 
         broker_config = {}
         # Check broker SASL Mode
-        if args.sasl-mode:
-            if not args.security-protocol:
+        if args.sasl_mode:
+            if not args.security_protocol:
                 print('Add security-protocol')
                 exit()
-            if not args.sasl-mechanism:
+            if not args.sasl_mechanism:
                 print('Add sasl-mechanism')
                 exit()
-            if not args.sasl-username:
+            if not args.sasl_username:
                 print('Add sasl-username')
                 exit()
-            if not args.sasl-password:
+            if not args.sasl_password:
                 print('Add sasl-password')
                 exit()
 
             else:
                 broker_config.update(
                     {
-                        'security.protocol': args.security-protocol,
-                        'sasl.mechanism': args.sasl-mechanism,
-                        'sasl.username': args.sasl-username,
-                        'sasl.password': args.sasl-password
+                        'security.protocol': args.security_protocol,
+                        'sasl.mechanism': args.sasl_mechanism,
+                        'sasl.username': args.sasl_username,
+                        'sasl.password': args.sasl_password
                     }
                 )
 
@@ -281,27 +281,27 @@ if __name__ == "__main__":
                 encryption_keys.append(key.encode())
         
         broker_config={}
-        if args.sasl-mode:
-            if not args.security-protocol:
+        if args.sasl_mode:
+            if not args.security_protocol:
                 print('Add security-protocol')
                 exit()
-            if not args.sasl-mechanism:
+            if not args.sasl_mechanism:
                 print('Add sasl-mechanism')
                 exit()
-            if not args.sasl-username:
+            if not args.sasl_username:
                 print('Add sasl-username')
                 exit()
-            if not args.sasl-password:
+            if not args.sasl_password:
                 print('Add sasl-password')
                 exit()
 
             else:
                 broker_config.update(
                     {
-                        'security.protocol': args.security-protocol,
-                        'sasl.mechanism': args.sasl-mechanism,
-                        'sasl.username': args.sasl-username,
-                        'sasl.password': args.sasl-password
+                        'security.protocol': args.security_protocol,
+                        'sasl.mechanism': args.sasl_mechanism,
+                        'sasl.username': args.sasl_username,
+                        'sasl.password': args.sasl_password
                     }
                 )
 
@@ -451,27 +451,27 @@ if __name__ == "__main__":
 
     elif args.command == 'list-topics':
         broker_config={}
-        if args.sasl-mode:
-            if not args.security-protocol:
+        if args.sasl_mode:
+            if not args.security_protocol:
                 print('Add security-protocol')
                 exit()
-            if not args.sasl-mechanism:
+            if not args.sasl_mechanism:
                 print('Add sasl-mechanism')
                 exit()
-            if not args.sasl-username:
+            if not args.sasl_username:
                 print('Add sasl-username')
                 exit()
-            if not args.sasl-password:
+            if not args.sasl_password:
                 print('Add sasl-password')
                 exit()
 
             else:
                 broker_config.update(
                     {
-                        'security.protocol': args.security-protocol,
-                        'sasl.mechanism': args.sasl-mechanism,
-                        'sasl.username': args.sasl-username,
-                        'sasl.password': args.sasl-password
+                        'security.protocol': args.security_protocol,
+                        'sasl.mechanism': args.sasl_mechanism,
+                        'sasl.username': args.sasl_username,
+                        'sasl.password': args.sasl_password
                     }
                 )
         print('\nTopic list:')
